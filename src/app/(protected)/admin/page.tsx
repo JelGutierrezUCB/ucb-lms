@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress'
 import { Users, BookOpen, GraduationCap, TrendingUp, AlertCircle, CheckCircle2, Clock } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { getCategoryLabel, getCategoryColor } from '@/lib/utils'
+import { ModuleCompletionList } from '@/components/admin/ModuleCompletionList'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,7 +33,7 @@ export default async function AdminDashboardPage() {
     supabase.from('quiz_attempts')
       .select('user_id, score, max_score, completed_at, content_block_id')
       .order('completed_at', { ascending: false })
-      .limit(200),
+      .limit(20),
   ])
 
   const employees = (allProfiles ?? []).filter(p => p.role === 'employee')
@@ -97,16 +97,46 @@ export default async function AdminDashboardPage() {
     return { ...m, assigned: assignedToModule.length, completed: completedForModule, pct }
   }).sort((a, b) => b.assigned - a.assigned)
 
-  // Recent quiz attempts enriched
-  const recentWithNames = (recentAttempts ?? []).slice(0, 10).map(a => {
+  // Fetch content_block → module mapping for quiz activity enrichment
+  const recentBlockIds = [...new Set((recentAttempts ?? []).map(a => a.content_block_id).filter(Boolean))]
+  const { data: quizBlocks } = recentBlockIds.length
+    ? await supabase.from('content_blocks').select('id, module_id').in('id', recentBlockIds)
+    : { data: [] }
+  const blockToModule: Record<string, string> = {}
+  for (const b of quizBlocks ?? []) blockToModule[b.id] = b.module_id
+
+  // Recent quiz attempts enriched with name + module title
+  const recentWithNames = (recentAttempts ?? []).map(a => {
     const p = (allProfiles ?? []).find(pr => pr.id === a.user_id)
+    const moduleId = blockToModule[a.content_block_id]
+    const mod = (modules ?? []).find(m => m.id === moduleId)
     return {
       ...a,
       name: p?.full_name ?? 'Unknown',
       department: p?.department ?? '',
+      moduleName: mod?.title ?? 'Training Quiz',
       scorePct: a.max_score > 0 ? Math.round((a.score / a.max_score) * 100) : 0,
     }
   })
+
+  // Per-module employee breakdown for drilldown (sorted: completed → in-progress → not started)
+  const moduleEmployeeBreakdown: Record<string, Array<{
+    name: string; dept: string
+    status: 'completed' | 'in_progress' | 'not_started'
+    done: number; total: number
+  }>> = {}
+  for (const m of publishedModules) {
+    const total = totalByModule[m.id] ?? 0
+    const assigned = (assignments ?? []).filter(a => a.module_id === m.id)
+    const statusOrder = { completed: 0, in_progress: 1, not_started: 2 } as const
+    moduleEmployeeBreakdown[m.id] = assigned.map(a => {
+      const emp = employees.find(e => e.id === a.user_id)
+      const done = completedByUserModule[`${a.user_id}_${m.id}`] ?? 0
+      const pct = total > 0 ? done / total : 0
+      const status = (pct >= 1 ? 'completed' : pct > 0 ? 'in_progress' : 'not_started') as 'completed' | 'in_progress' | 'not_started'
+      return { name: emp?.full_name ?? 'Unknown', dept: emp?.department ?? '', status, done, total }
+    }).sort((a, b) => statusOrder[a.status] - statusOrder[b.status])
+  }
 
   // Department breakdown
   const deptMap: Record<string, { total: number; completed: number }> = {}
@@ -129,7 +159,7 @@ export default async function AdminDashboardPage() {
           {[
             { label: 'Total Employees', value: employees.length, sub: `${managers.length} managers`, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
             { label: 'Training Modules', value: publishedModules.length, sub: `${(modules ?? []).length} total`, icon: BookOpen, color: 'text-purple-600', bg: 'bg-purple-50' },
-            { label: 'Completion Rate', value: `${overallCompletionRate}%`, sub: `${completedCount} of ${totalAssignments}`, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' },
+            { label: 'Training Completion', value: `${overallCompletionRate}%`, sub: `${completedCount} of ${totalAssignments} assignments done`, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' },
             { label: 'Overdue', value: overdueCount, sub: `${notStartedCount} not started`, icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-50' },
           ].map((stat) => (
             <Card key={stat.label}>
@@ -169,34 +199,19 @@ export default async function AdminDashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Module completion breakdown */}
+          {/* Module completion breakdown — click any row to see who completed/hasn't */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle>Module Completion Rates</CardTitle>
+              <div>
+                <CardTitle>Module Completion Rates</CardTitle>
+                <p className="text-xs text-slate-400 mt-0.5">Click a module to see employee breakdown</p>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {moduleStats.length === 0 ? (
-                <p className="text-slate-400 text-sm text-center py-4">No published modules yet</p>
-              ) : moduleStats.map(m => (
-                <div key={m.id} className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: getCategoryColor(m.category) }}
-                      />
-                      <span className="text-sm font-medium text-slate-800 truncate max-w-[200px]">{m.title}</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs text-slate-500">{m.completed}/{m.assigned}</span>
-                      <Badge variant={m.pct === 100 ? 'success' : m.pct > 50 ? 'warning' : 'outline'} className="text-xs">
-                        {m.pct}%
-                      </Badge>
-                    </div>
-                  </div>
-                  <Progress value={m.pct} className="h-1.5" />
-                </div>
-              ))}
+            <CardContent>
+              <ModuleCompletionList
+                moduleStats={moduleStats}
+                moduleEmployeeBreakdown={moduleEmployeeBreakdown}
+              />
             </CardContent>
           </Card>
 
@@ -222,7 +237,7 @@ export default async function AdminDashboardPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-800 truncate">{a.name}</p>
-                        <p className="text-xs text-slate-400">{a.department}</p>
+                        <p className="text-xs text-slate-400 truncate" title={a.moduleName}>{a.moduleName}</p>
                       </div>
                       <Badge variant={a.scorePct >= 70 ? 'success' : 'danger'} className="shrink-0">
                         {a.scorePct}%
