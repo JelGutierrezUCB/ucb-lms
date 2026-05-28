@@ -97,13 +97,18 @@ export default async function AdminDashboardPage() {
     return { ...m, assigned: assignedToModule.length, completed: completedForModule, pct }
   }).sort((a, b) => b.assigned - a.assigned)
 
-  // Fetch content_block → module mapping for quiz activity enrichment
+  // Fetch content_block → module mapping via sections join
   const recentBlockIds = [...new Set((recentAttempts ?? []).map(a => a.content_block_id).filter(Boolean))]
   const { data: quizBlocks } = recentBlockIds.length
-    ? await supabase.from('content_blocks').select('id, module_id').in('id', recentBlockIds)
+    ? await supabase
+        .from('content_blocks')
+        .select('id, sections!inner(module_id)')
+        .in('id', recentBlockIds)
     : { data: [] }
   const blockToModule: Record<string, string> = {}
-  for (const b of quizBlocks ?? []) blockToModule[b.id] = b.module_id
+  for (const b of (quizBlocks ?? []) as any[]) {
+    if (b.sections?.module_id) blockToModule[b.id] = b.sections.module_id
+  }
 
   // Recent quiz attempts enriched with name + module title
   const recentWithNames = (recentAttempts ?? []).map(a => {
