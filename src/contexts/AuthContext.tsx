@@ -16,12 +16,15 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 })
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(true)
+export function AuthProvider({ children, initialProfile }: { children: React.ReactNode; initialProfile?: Profile | null }) {
+  const [profile, setProfile] = useState<Profile | null>(initialProfile ?? null)
+  const [loading, setLoading] = useState(!initialProfile)
   const supabase = createClient()
 
   useEffect(() => {
+    // If we already have a profile from the server, no need to re-fetch
+    if (initialProfile) return
+
     const loadProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {

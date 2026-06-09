@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ProxyProvider } from '@/contexts/ProxyContext'
 import { Sidebar } from '@/components/layout/Sidebar'
+import type { Profile } from '@/types'
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -12,8 +13,14 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   if (!user) redirect('/login')
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single() as { data: Profile | null }
+
   return (
-    <AuthProvider>
+    <AuthProvider initialProfile={profile}>
       <ProxyProvider currentUserId={user.id}>
         <div className="flex h-screen overflow-hidden bg-slate-100">
           <Sidebar />

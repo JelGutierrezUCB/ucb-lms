@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useMemo, Fragment } from 'react'
-import { Search, ChevronDown, ChevronUp, BarChart3, CheckCircle, Clock, AlertCircle, Trophy } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp, BarChart3, CheckCircle, Clock, AlertCircle, Trophy, Download } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,6 +11,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { Profile, Module } from '@/types'
 import { formatDate } from '@/lib/utils'
 
+// Production facility codes — employees at these locations get the Production tab
+const PRODUCTION_CODES = ['HA', 'ML', 'HV', 'MLC', 'HVP']
+
+function isProductionEmployee(dept: string | null | undefined) {
+  if (!dept) return false
+  return PRODUCTION_CODES.some(code => dept.toUpperCase().startsWith(code))
+}
+
+type ManualCompletion = {
+  id: string
+  user_id: string
+  module_id: string
+  score: number
+  max_score: number
+  passed: boolean
+  trainer_id: string | null
+  completion_date: string
+  location: string | null
+  notes: string | null
+  created_at: string
+}
+
 interface Props {
   employees: Profile[]
   modules: Module[]
@@ -17,14 +40,19 @@ interface Props {
   sections: { id: string; module_id: string; title: string; order_index: number }[]
   progress: { user_id: string; section_id: string; completed_at: string; sections: { module_id: string } }[]
   quizAttempts: { id: string; user_id: string; content_block_id: string; score: number; max_score: number; completed_at: string }[]
+  manualCompletions?: ManualCompletion[]
   viewerRole: string
 }
 
-export function ReportsView({ employees, modules, assignments, sections, progress, quizAttempts, viewerRole }: Props) {
+export function ReportsView({ employees, modules, assignments, sections, progress, quizAttempts, manualCompletions = [], viewerRole }: Props) {
+  const [activeTab, setActiveTab] = useState<'all' | 'office' | 'production'>('all')
   const [search, setSearch] = useState('')
   const [filterDept, setFilterDept] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null)
+  // Production tab state
+  const [prodFacility, setProdFacility] = useState('all')
+  const [prodScope, setProdScope] = useState<'combined' | 'warehouse' | 'lms'>('combined')
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -79,8 +107,24 @@ export function ReportsView({ employees, modules, assignments, sections, progres
     return depts.sort() as string[]
   }, [employees])
 
+  // Divide employees into office vs production
+  const productionEmployees = useMemo(() => employees.filter(e => isProductionEmployee(e.department)), [employees])
+  const officeEmployees = useMemo(() => employees.filter(e => !isProductionEmployee(e.department)), [employees])
+
+  // Production facilities list
+  const productionFacilities = useMemo(() => {
+    const locs = [...new Set(productionEmployees.map(e => e.department).filter(Boolean))] as string[]
+    return locs.sort()
+  }, [productionEmployees])
+
+  // Employees shown in current tab (all/office only — production has its own view)
+  const tabEmployees = useMemo(() => {
+    if (activeTab === 'office') return officeEmployees
+    return employees
+  }, [activeTab, employees, officeEmployees])
+
   // Per-employee summary
-  const employeeData = useMemo(() => employees.map(emp => {
+  const employeeData = useMemo(() => tabEmployees.map(emp => {
     const empAssignments = assignments.filter(a => a.user_id === emp.id)
     let completed = 0, overdue = 0
     for (const a of empAssignments) {
@@ -132,8 +176,263 @@ export function ReportsView({ employees, modules, assignments, sections, progres
     ? Math.round(employeeData.reduce((s, e) => s + e.pct, 0) / employeeData.length)
     : 0
 
+  function exportCSV() {
+    const headers = ['Employee', 'Location', 'Trainings Completed', 'Trainings Assigned', 'Completion %', 'Avg Quiz Score', 'Total Attempts', 'Status']
+    const rows = employeeData.map(({ emp, assignments: empA, completed, pct, avgScore, totalAttempts, status }) => [
+      emp.full_name,
+      emp.department ?? '',
+      completed,
+      empA.length,
+      `${pct}%`,
+      avgScore !== null ? `${avgScore}%` : '',
+      totalAttempts,
+      status.replace('_', ' '),
+    ])
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `training-report-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // ── Production tab computed stats ──────────────────────────────
+  const prodEmployees = useMemo(() =>
+    prodFacility === 'all' ? productionEmployees : productionEmployees.filter(e => e.department === prodFacility),
+    [productionEmployees, prodFacility]
+  )
+
+  const prodStats = useMemo(() => {
+    const empIds = new Set(prodEmployees.map(e => e.id))
+    const myAssignments = assignments.filter(a => empIds.has(a.user_id))
+    const myManual = manualCompletions.filter(m => empIds.has(m.user_id))
+    const today = new Date().toISOString().split('T')[0]
+
+    // Warehouse stats
+    const warehouseCompleted = myManual.filter(m => m.passed).length
+    const warehouseRetakes = myManual.filter(m => !m.passed).length
+
+    // LMS stats
+    const lmsCompleted = myAssignments.filter(a => {
+      const done = completedByUserModule[`${a.user_id}_${a.module_id}`] ?? 0
+      const total = totalByModule[a.module_id] ?? 0
+      return total > 0 && done >= total
+    }).length
+    const lmsPending = myAssignments.filter(a => {
+      const done = completedByUserModule[`${a.user_id}_${a.module_id}`] ?? 0
+      const total = totalByModule[a.module_id] ?? 0
+      return !(total > 0 && done >= total)
+    }).length
+
+    // Combined completion
+    const totalAssigned = myAssignments.length + myManual.length
+    const totalCompleted = lmsCompleted + warehouseCompleted
+    const combinedPct = totalAssigned > 0 ? Math.round((totalCompleted / totalAssigned) * 100) : 0
+
+    // Per-employee status
+    const empStats = prodEmployees.map(emp => {
+      const empA = myAssignments.filter(a => a.user_id === emp.id)
+      const empM = myManual.filter(m => m.user_id === emp.id)
+      const lmsDone = empA.filter(a => {
+        const done = completedByUserModule[`${emp.id}_${a.module_id}`] ?? 0
+        const total = totalByModule[a.module_id] ?? 0
+        return total > 0 && done >= total
+      }).length
+      const warehouseDone = empM.filter(m => m.passed).length
+      const totalEmpAssigned = empA.length + empM.length
+      const totalEmpDone = lmsDone + warehouseDone
+      const overdue = empA.some(a => a.due_date && a.due_date < today && (completedByUserModule[`${emp.id}_${a.module_id}`] ?? 0) < (totalByModule[a.module_id] ?? 1))
+      const failed = empM.some(m => !m.passed)
+      const status = totalEmpAssigned === 0 ? 'unassigned'
+        : overdue ? 'overdue'
+        : failed ? 'failed'
+        : totalEmpDone >= totalEmpAssigned ? 'complete'
+        : totalEmpDone > 0 ? 'in_progress'
+        : 'not_started'
+      return { emp, lmsDone, warehouseDone, totalEmpAssigned, totalEmpDone, status, empA, empM }
+    })
+
+    const fullyTrained = empStats.filter(e => e.status === 'complete').length
+    const inProgress = empStats.filter(e => e.status === 'in_progress').length
+    const overdueCount = empStats.filter(e => e.status === 'overdue').length
+    const failedCount = empStats.filter(e => e.status === 'failed').length
+
+    return { warehouseCompleted, warehouseRetakes, lmsCompleted, lmsPending, combinedPct, totalAssigned, totalCompleted, empStats, fullyTrained, inProgress, overdueCount, failedCount }
+  }, [prodEmployees, assignments, manualCompletions, completedByUserModule, totalByModule])
+
   return (
     <div className="space-y-6">
+      {/* Division tabs */}
+      <div className="flex gap-1 border-b border-slate-200">
+        {([['all', 'All Divisions'], ['office', 'Office'], ['production', 'Production']] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === key
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            {label}
+            <span className="ml-1.5 text-xs text-slate-400">
+              {key === 'all' ? employees.length : key === 'office' ? officeEmployees.length : productionEmployees.length}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Production tab */}
+      {activeTab === 'production' && (
+        <div className="space-y-5">
+          {/* Filters row */}
+          <div className="flex flex-wrap gap-3 items-center">
+            <Select value={prodFacility} onValueChange={setProdFacility}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="All facilities" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Facilities</SelectItem>
+                {productionFacilities.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-sm">
+              {([['combined', 'Combined'], ['warehouse', 'Warehouse Only'], ['lms', 'LMS Only']] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setProdScope(key)}
+                  className={`px-3 py-1.5 font-medium transition-colors ${
+                    prodScope === key ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <span className="text-sm text-slate-500">{prodEmployees.length} employees</span>
+          </div>
+
+          {/* Stats cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {prodScope !== 'lms' && (
+              <>
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-xs text-slate-500">Warehouse Completed</p>
+                    <p className="text-2xl font-bold text-slate-900 mt-1">{prodStats.warehouseCompleted}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-xs text-slate-500">Retakes Required</p>
+                    <p className="text-2xl font-bold text-red-600 mt-1">{prodStats.warehouseRetakes}</p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+            {prodScope !== 'warehouse' && (
+              <>
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-xs text-slate-500">LMS Completed</p>
+                    <p className="text-2xl font-bold text-slate-900 mt-1">{prodStats.lmsCompleted}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-xs text-slate-500">LMS Pending</p>
+                    <p className="text-2xl font-bold text-amber-600 mt-1">{prodStats.lmsPending}</p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+
+          {/* Overall completion */}
+          <Card>
+            <CardContent className="p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-slate-800">
+                  {prodScope === 'combined' ? 'Combined' : prodScope === 'warehouse' ? 'Warehouse' : 'LMS'} Production Completion
+                </p>
+                <span className="text-2xl font-bold text-slate-900">{prodStats.combinedPct}%</span>
+              </div>
+              <Progress value={prodStats.combinedPct} className="h-2" />
+              <p className="text-xs text-slate-400">{prodStats.totalCompleted} of {prodStats.totalAssigned} assigned trainings completed</p>
+              <div className="grid grid-cols-4 gap-3 pt-1">
+                {[
+                  { label: 'Employees', value: prodEmployees.length, color: 'text-slate-700' },
+                  { label: 'Fully Trained', value: prodStats.fullyTrained, color: 'text-green-600' },
+                  { label: 'In Progress', value: prodStats.inProgress, color: 'text-amber-600' },
+                  { label: 'Overdue', value: prodStats.overdueCount, color: 'text-red-600' },
+                ].map(s => (
+                  <div key={s.label} className="text-center">
+                    <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Employee breakdown */}
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    <th className="text-left px-4 py-3 font-medium text-slate-600">Employee</th>
+                    <th className="text-left px-4 py-3 font-medium text-slate-600">Facility</th>
+                    {prodScope !== 'lms' && <th className="text-center px-4 py-3 font-medium text-slate-600">Warehouse</th>}
+                    {prodScope !== 'warehouse' && <th className="text-center px-4 py-3 font-medium text-slate-600">LMS</th>}
+                    <th className="text-center px-4 py-3 font-medium text-slate-600">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {prodStats.empStats.length === 0 ? (
+                    <tr><td colSpan={5} className="text-center py-8 text-slate-400">No employees</td></tr>
+                  ) : prodStats.empStats.map(({ emp, lmsDone, warehouseDone, empA, empM, status }) => (
+                    <tr key={emp.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-8 w-8 rounded-full bg-blue-700 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                            {emp.full_name.charAt(0)}
+                          </div>
+                          <span className="font-medium text-slate-900">{emp.full_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">{emp.department ?? '—'}</td>
+                      {prodScope !== 'lms' && (
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-slate-700">{warehouseDone}/{empM.length}</span>
+                          {empM.some(m => !m.passed) && <Badge variant="danger" className="ml-1 text-xs">Retake</Badge>}
+                        </td>
+                      )}
+                      {prodScope !== 'warehouse' && (
+                        <td className="px-4 py-3 text-center text-slate-700">{lmsDone}/{empA.length}</td>
+                      )}
+                      <td className="px-4 py-3 text-center">
+                        {status === 'complete' ? <Badge variant="success">Trained</Badge>
+                          : status === 'in_progress' ? <Badge variant="warning">In Progress</Badge>
+                          : status === 'overdue' ? <Badge variant="danger">Overdue</Badge>
+                          : status === 'failed' ? <Badge variant="danger">Retake</Badge>
+                          : status === 'not_started' ? <Badge variant="outline">Not Started</Badge>
+                          : <span className="text-slate-300 text-xs">Unassigned</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* All Divisions / Office tab content */}
+      {activeTab !== 'production' && <>
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -192,6 +491,10 @@ export function ReportsView({ employees, modules, assignments, sections, progres
           </SelectContent>
         </Select>
         <span className="text-sm text-slate-500">{filtered.length} of {employees.length} employees</span>
+        <Button variant="outline" size="sm" onClick={exportCSV} className="ml-auto gap-1.5">
+          <Download className="h-4 w-4" />
+          Export CSV
+        </Button>
       </div>
 
       {/* Employee table */}
@@ -356,6 +659,8 @@ export function ReportsView({ employees, modules, assignments, sections, progres
           </table>
         </div>
       </Card>
+
+      </> /* end All/Office tab */}
     </div>
   )
 }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Plus, Pencil, Trash2, Eye, EyeOff, BookOpen, Clock } from 'lucide-react'
+import { Plus, Pencil, Trash2, Eye, EyeOff, BookOpen, Clock, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -17,11 +17,13 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
+import { AssignModuleDialog } from './AssignModuleDialog'
 import type { Module } from '@/types'
 
 export function ModuleList({ initialModules }: { initialModules: Module[] }) {
   const [modules, setModules] = useState(initialModules)
   const [deleteModule, setDeleteModule] = useState<Module | null>(null)
+  const [assigningModule, setAssigningModule] = useState<Module | null>(null)
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
 
@@ -119,6 +121,18 @@ export function ModuleList({ initialModules }: { initialModules: Module[] }) {
                       Edit
                     </Button>
                   </Link>
+                  {mod.is_published && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAssigningModule(mod)}
+                      title="Assign to employees"
+                      className="gap-1.5"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      Assign
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -140,6 +154,15 @@ export function ModuleList({ initialModules }: { initialModules: Module[] }) {
             </Card>
           ))}
         </div>
+      )}
+
+      {assigningModule && (
+        <AssignModuleDialog
+          moduleId={assigningModule.id}
+          moduleTitle={assigningModule.title}
+          open={!!assigningModule}
+          onOpenChange={open => !open && setAssigningModule(null)}
+        />
       )}
 
       <Dialog open={!!deleteModule} onOpenChange={open => !open && setDeleteModule(null)}>

@@ -8,6 +8,7 @@ import { Users, BookOpen, GraduationCap, TrendingUp, AlertCircle, CheckCircle2, 
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ModuleCompletionList } from '@/components/admin/ModuleCompletionList'
+import { AdminActionButtons } from '@/components/admin/AdminActionButtons'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +27,7 @@ export default async function AdminDashboardPage() {
     { data: sections },
     { data: recentAttempts },
   ] = await Promise.all([
-    supabase.from('profiles').select('id, full_name, role, department').order('full_name'),
+    supabase.from('profiles').select('id, full_name, role, department, is_active').order('full_name'),
     supabase.from('modules').select('id, title, category, is_published, estimated_minutes'),
     supabase.from('assignments').select('user_id, module_id, assigned_at, due_date'),
     supabase.from('sections').select('id, module_id'),
@@ -36,8 +37,8 @@ export default async function AdminDashboardPage() {
       .limit(20),
   ])
 
-  const employees = (allProfiles ?? []).filter(p => p.role === 'employee')
-  const managers = (allProfiles ?? []).filter(p => p.role === 'manager')
+  const employees = (allProfiles ?? []).filter(p => p.role === 'employee' && p.is_active !== false)
+  const managers = (allProfiles ?? []).filter(p => p.role === 'manager' && p.is_active !== false)
   const employeeIds = employees.map(e => e.id)
 
   // Section progress for employees
@@ -97,29 +98,34 @@ export default async function AdminDashboardPage() {
     return { ...m, assigned: assignedToModule.length, completed: completedForModule, pct }
   }).sort((a, b) => b.assigned - a.assigned)
 
-  // Fetch content_block → module mapping via sections join
+  // Fetch content_block → section + module mapping via nested join
   const recentBlockIds = [...new Set((recentAttempts ?? []).map(a => a.content_block_id).filter(Boolean))]
   const { data: quizBlocks } = recentBlockIds.length
     ? await supabase
         .from('content_blocks')
-        .select('id, sections!inner(module_id)')
+        .select('id, sections!inner(title, module_id, modules!inner(title))')
         .in('id', recentBlockIds)
     : { data: [] }
-  const blockToModule: Record<string, string> = {}
+  const blockToInfo: Record<string, { moduleTitle: string; sectionTitle: string }> = {}
   for (const b of (quizBlocks ?? []) as any[]) {
-    if (b.sections?.module_id) blockToModule[b.id] = b.sections.module_id
+    if (b.sections?.module_id) {
+      blockToInfo[b.id] = {
+        moduleTitle: b.sections.modules?.title ?? 'Training Quiz',
+        sectionTitle: b.sections.title ?? '',
+      }
+    }
   }
 
-  // Recent quiz attempts enriched with name + module title
+  // Recent quiz attempts enriched with name + module/section title
   const recentWithNames = (recentAttempts ?? []).map(a => {
     const p = (allProfiles ?? []).find(pr => pr.id === a.user_id)
-    const moduleId = blockToModule[a.content_block_id]
-    const mod = (modules ?? []).find(m => m.id === moduleId)
+    const info = blockToInfo[a.content_block_id]
     return {
       ...a,
       name: p?.full_name ?? 'Unknown',
       department: p?.department ?? '',
-      moduleName: mod?.title ?? 'Training Quiz',
+      moduleName: info?.moduleTitle ?? 'Training Quiz',
+      sectionName: info?.sectionTitle ?? '',
       scorePct: a.max_score > 0 ? Math.round((a.score / a.max_score) * 100) : 0,
     }
   })
@@ -242,7 +248,9 @@ export default async function AdminDashboardPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-800 truncate">{a.name}</p>
-                        <p className="text-xs text-slate-400 truncate" title={a.moduleName}>{a.moduleName}</p>
+                        <p className="text-xs text-slate-400 truncate" title={a.sectionName ? `${a.moduleName} · ${a.sectionName}` : a.moduleName}>
+                          {a.moduleName}{a.sectionName ? ` · ${a.sectionName}` : ''}
+                        </p>
                       </div>
                       <Badge variant={a.scorePct >= 70 ? 'success' : 'danger'} className="shrink-0">
                         {a.scorePct}%
@@ -300,6 +308,11 @@ export default async function AdminDashboardPage() {
             <Link href="/reports">
               <Button variant="secondary" className="gap-2"><TrendingUp className="h-4 w-4" />View Reports</Button>
             </Link>
+            <AdminActionButtons
+              employees={employees as any}
+              modules={(modules ?? []) as any}
+              currentUserId={user.id}
+            />
           </CardContent>
         </Card>
       </main>
