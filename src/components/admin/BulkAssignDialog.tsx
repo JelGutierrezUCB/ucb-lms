@@ -90,6 +90,18 @@ export function BulkAssignDialog({ employees, modules, currentUserId, onClose }:
         .from('assignments')
         .upsert(rows, { onConflict: 'user_id,module_id', ignoreDuplicates: true })
       if (error) throw error
+
+      const userIds = [...selectedEmployees]
+      for (const moduleId of selectedModules) {
+        const mod = modules.find(m => m.id === moduleId)
+        if (!mod) continue
+        fetch('/api/notifications/assignment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userIds, moduleId, moduleTitle: mod.title, dueDate: null }),
+        }).catch(() => {})
+      }
+
       setDone(true)
       setTimeout(() => { onClose(); window.location.reload() }, 1200)
     } catch (e) {

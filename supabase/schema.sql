@@ -176,3 +176,44 @@ create policy "quiz_insert" on quiz_attempts for insert with check (true);
 
 -- Seed initial categories (just for reference)
 -- Categories: onboarding, sales, warehouse, ucbzerowaste, general
+
+-- Notifications
+create table notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id) on delete cascade not null,
+  type text not null,
+  title text not null,
+  message text not null,
+  link text,
+  read boolean not null default false,
+  created_at timestamptz default now()
+);
+
+create index notifications_user_id_idx on notifications(user_id, created_at desc);
+
+alter table notifications enable row level security;
+
+create policy "notifications_select" on notifications for select using (
+  user_id = auth.uid()
+);
+create policy "notifications_update" on notifications for update using (
+  user_id = auth.uid()
+);
+-- No insert/delete policy for authenticated users: notifications are only
+-- created server-side via the service-role client (see src/lib/notifications.ts).
+
+-- Storage bucket for uploaded training videos
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('training-videos', 'training-videos', true, 104857600, array['video/mp4','video/webm','video/quicktime','video/x-msvideo']);
+
+create policy "training_videos_select" on storage.objects for select using (
+  bucket_id = 'training-videos'
+);
+create policy "training_videos_insert" on storage.objects for insert with check (
+  bucket_id = 'training-videos' and
+  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+);
+create policy "training_videos_delete" on storage.objects for delete using (
+  bucket_id = 'training-videos' and
+  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+);

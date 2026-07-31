@@ -132,6 +132,12 @@ export function AssignModuleDialog({ moduleId, moduleTitle, open, onOpenChange }
         }))
         const { error } = await supabase.from('assignments').insert(rows)
         if (error) throw error
+
+        fetch('/api/notifications/assignment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userIds: toAdd, moduleId, moduleTitle, dueDate: dueDate || null }),
+        }).catch(() => {})
       }
 
       // Update due date for existing assignments that remain selected

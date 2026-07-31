@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Search, Pencil, Trash2, UserX, UserCheck, EyeOff, Eye } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, UserX, UserCheck, EyeOff, Eye, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Profile, Role } from '@/types'
 import { getRoleLabel, formatDate } from '@/lib/utils'
+import { CsvImportDialog } from './CsvImportDialog'
 
 interface Props {
   initialProfiles: Profile[]
@@ -35,6 +36,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
   const [search, setSearch] = useState('')
   const [showInactive, setShowInactive] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [editUser, setEditUser] = useState<Profile | null>(null)
   const [deleteUser, setDeleteUser] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(false)
@@ -202,10 +204,16 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
           </Button>
         </div>
         {currentUserRole === 'admin' && (
-          <Button onClick={() => { resetForm(); setShowCreate(true) }}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add User
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setShowImport(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Import CSV
+            </Button>
+            <Button onClick={() => { resetForm(); setShowCreate(true) }}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add User
+            </Button>
+          </div>
         )}
       </div>
 
@@ -422,6 +430,15 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CsvImportDialog
+        open={showImport}
+        onOpenChange={setShowImport}
+        onImported={async () => {
+          const { data } = await supabase.from('profiles').select('*').order('full_name')
+          if (data) setProfiles(data)
+        }}
+      />
     </div>
   )
 }

@@ -40,9 +40,14 @@ export interface TextContent {
   html: string
 }
 
+export type VideoSource = 'youtube' | 'upload'
+
 export interface VideoContent {
+  source?: VideoSource
   youtube_url: string
   youtube_id: string
+  upload_url?: string
+  upload_path?: string
   caption?: string
 }
 
@@ -96,6 +101,17 @@ export interface QuizAttempt {
   max_score: number
   answers: number[]
   completed_at: string
+}
+
+export interface Notification {
+  id: string
+  user_id: string
+  type: string
+  title: string
+  message: string
+  link: string | null
+  read: boolean
+  created_at: string
 }
 
 export interface ModuleWithProgress extends Module {

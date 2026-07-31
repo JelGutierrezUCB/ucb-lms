@@ -32,8 +32,18 @@ Then edit `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-ANTHROPIC_API_KEY=sk-ant-...
+UCB_AI_KEY=sk-ant-...
+RESEND_API_KEY=re_...
+RESEND_FROM_EMAIL=UCB Training <onboarding@resend.dev>
+NEXT_PUBLIC_APP_URL=https://your-deployed-url.vercel.app
+CRON_SECRET=any-random-string
 ```
+
+- `UCB_AI_KEY` — Anthropic API key, powers the AI Training Generator
+- `RESEND_API_KEY` — from [resend.com](https://resend.com), sends welcome and notification emails. Without it, emails are skipped (logged to console) but the app still works.
+- `RESEND_FROM_EMAIL` — optional, defaults to Resend's shared sandbox sender until you verify your own domain
+- `NEXT_PUBLIC_APP_URL` — used to build links inside emails
+- `CRON_SECRET` — protects the daily due-date reminder cron endpoint (`/api/cron/due-date-reminders`, configured in `vercel.json`); Vercel sends it automatically as a bearer token when set
 
 ---
 
@@ -102,9 +112,18 @@ Warehouse workers without email access don't need their own login.
 5. Review the preview and save
 6. Edit the module further in the Module Editor if needed
 
+### Bulk User Import (CSV)
+Admin → Users → **Import CSV**. Columns: `full_name, email, role, department, manager_email`.
+Each new user gets a generated password emailed to them via Resend.
+
+### Notifications
+Bell icon in the header shows in-app notifications (new assignments, due-date reminders),
+with a matching email sent via Resend. A daily cron job (`vercel.json`) checks for
+assignments due the next day and reminds anyone who hasn't finished.
+
 ### Training Modules
 - Each module has **sections**
-- Each section can have **text blocks**, **YouTube video blocks**, and **quiz blocks**
+- Each section can have **text blocks**, **video blocks** (YouTube link or direct file upload), and **quiz blocks**
 - Quizzes require a passing score (default 70%) before the section can be marked complete
 - Progress is tracked per user per section
 

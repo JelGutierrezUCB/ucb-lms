@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { getRoleLabel } from '@/lib/utils'
+import { NotificationBell } from './NotificationBell'
 
 export function Header({ title }: { title?: string }) {
   const { profile, signOut } = useAuth()
@@ -45,6 +46,8 @@ export function Header({ title }: { title?: string }) {
             </button>
           </div>
         )}
+
+        {profile && <NotificationBell userId={profile.id} />}
 
         {/* User menu */}
         <DropdownMenu>
