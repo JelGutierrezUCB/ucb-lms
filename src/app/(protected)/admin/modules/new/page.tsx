@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
@@ -15,7 +16,9 @@ export default async function NewModulePage() {
     <div className="flex flex-col flex-1 overflow-auto">
       <Header title="Create New Module" />
       <main className="flex-1 p-6">
-        <ModuleEditor createdBy={user.id} />
+        <Suspense fallback={null}>
+          <ModuleEditor createdBy={user.id} />
+        </Suspense>
       </main>
     </div>
   )

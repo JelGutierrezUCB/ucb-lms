@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Plus, Trash2, GripVertical, ChevronDown, ChevronUp,
   Type, Video, HelpCircle, Save, ArrowLeft, Eye, EyeOff, Folder, FolderOpen, Check, X,
@@ -124,7 +124,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
       id,
       module_id: existingModule?.id ?? '',
       group_id: groupId,
-      title: `Section ${sections.length + 1}`,
+      title: `Training ${sections.length + 1}`,
       order_index: sections.length,
       created_at: new Date().toISOString(),
       content_blocks: [],
@@ -132,6 +132,19 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
     setSections(prev => [...prev, newSection])
     setExpandedSections(prev => new Set([...prev, id]))
   }
+
+  // Jump straight into adding a training when arriving via the "Add Training" button on the module list
+  const searchParams = useSearchParams()
+  const autoAddedRef = useRef(false)
+  useEffect(() => {
+    if (autoAddedRef.current) return
+    if (searchParams.get('addTraining') === '1') {
+      autoAddedRef.current = true
+      addSection(null)
+      router.replace(existingModule ? `/admin/modules/${existingModule.id}/edit` : '/admin/modules/new')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const updateSection = (id: string, title: string) => {
     setSections(prev => prev.map(s => s.id === id ? { ...s, title } : s))

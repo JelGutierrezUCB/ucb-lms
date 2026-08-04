@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Plus, Pencil, Trash2, Eye, EyeOff, BookOpen, Clock, UserPlus } from 'lucide-react'
+import { Plus, Pencil, Trash2, Eye, EyeOff, BookOpen, Clock, UserPlus, GraduationCap } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -118,7 +118,13 @@ export function ModuleList({ initialModules }: { initialModules: Module[] }) {
                   <Link href={`/admin/modules/${mod.id}/edit`} className="flex-1">
                     <Button variant="outline" size="sm" className="w-full">
                       <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                      Edit
+                      Edit Module
+                    </Button>
+                  </Link>
+                  <Link href={`/admin/modules/${mod.id}/edit?addTraining=1`} className="flex-1">
+                    <Button size="sm" className="w-full">
+                      <GraduationCap className="h-3.5 w-3.5 mr-1.5" />
+                      Add Training
                     </Button>
                   </Link>
                   {mod.is_published && (

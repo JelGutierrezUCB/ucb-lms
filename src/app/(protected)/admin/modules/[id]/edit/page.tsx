@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
@@ -49,7 +50,9 @@ export default async function EditModulePage({ params }: { params: Promise<{ id:
     <div className="flex flex-col flex-1 overflow-auto">
       <Header title={`Edit: ${module.title}`} />
       <main className="flex-1 p-6">
-        <ModuleEditor module={module} initialGroups={groups ?? []} initialSections={sectionsWithBlocks} createdBy={user.id} />
+        <Suspense fallback={null}>
+          <ModuleEditor module={module} initialGroups={groups ?? []} initialSections={sectionsWithBlocks} createdBy={user.id} />
+        </Suspense>
       </main>
     </div>
   )
