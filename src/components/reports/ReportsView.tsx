@@ -1,15 +1,21 @@
 'use client'
 
 import { useState, useMemo, Fragment } from 'react'
-import { Search, ChevronDown, ChevronUp, BarChart3, CheckCircle, Clock, AlertCircle, Trophy, Download } from 'lucide-react'
+import Link from 'next/link'
+import { toast } from 'sonner'
+import {
+  Search, ChevronDown, ChevronUp, BarChart3, CheckCircle, Clock, AlertCircle, Download,
+  Check, X, Trash2, Award, ExternalLink,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Profile, Module } from '@/types'
-import { formatDate } from '@/lib/utils'
+import { formatDate, getCategoryLabel } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 
 // Production facility codes — employees at these locations get the Production tab
 const PRODUCTION_CODES = ['HA', 'ML', 'HV', 'MLC', 'HVP']
@@ -38,15 +44,22 @@ interface Props {
   modules: Module[]
   assignments: { id: string; user_id: string; module_id: string; assigned_at: string; due_date: string | null }[]
   sections: { id: string; module_id: string; title: string; order_index: number }[]
+  contentBlocks: { id: string; section_id: string; type: string }[]
   progress: { user_id: string; section_id: string; completed_at: string; sections: { module_id: string } }[]
   quizAttempts: { id: string; user_id: string; content_block_id: string; score: number; max_score: number; completed_at: string }[]
   manualCompletions?: ManualCompletion[]
   viewerRole: string
 }
 
-export function ReportsView({ employees, modules, assignments, sections, progress, quizAttempts, manualCompletions = [], viewerRole }: Props) {
+export function ReportsView({ employees, modules, assignments: rawAssignments, sections, contentBlocks, progress, quizAttempts, manualCompletions = [], viewerRole }: Props) {
+  const supabase = createClient()
   const [activeTab, setActiveTab] = useState<'all' | 'office' | 'production'>('all')
   const [search, setSearch] = useState('')
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set())
+  const assignments = useMemo(
+    () => rawAssignments.filter(a => !removedIds.has(a.id)),
+    [rawAssignments, removedIds]
+  )
   const [filterDept, setFilterDept] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null)
@@ -87,6 +100,66 @@ export function ReportsView({ employees, modules, assignments, sections, progres
     }
     return map
   }, [progress])
+
+  // Which content types (text/video/quiz) each module actually contains
+  const sectionToModule = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const s of sections) map[s.id] = s.module_id
+    return map
+  }, [sections])
+
+  const contentTypesByModule = useMemo(() => {
+    const map: Record<string, { text: boolean; video: boolean; quiz: boolean }> = {}
+    for (const cb of contentBlocks) {
+      const moduleId = sectionToModule[cb.section_id]
+      if (!moduleId) continue
+      const entry = map[moduleId] ?? (map[moduleId] = { text: false, video: false, quiz: false })
+      if (cb.type === 'text') entry.text = true
+      else if (cb.type === 'video') entry.video = true
+      else if (cb.type === 'quiz') entry.quiz = true
+    }
+    return map
+  }, [contentBlocks, sectionToModule])
+
+  const contentBlockToModule = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const cb of contentBlocks) {
+      const moduleId = sectionToModule[cb.section_id]
+      if (moduleId) map[cb.id] = moduleId
+    }
+    return map
+  }, [contentBlocks, sectionToModule])
+
+  // Best raw quiz score (not just %) per user per module, for the "Score" column
+  const bestRawScoreByUserModule = useMemo(() => {
+    const map: Record<string, { score: number; max: number; pct: number }> = {}
+    for (const qa of quizAttempts) {
+      const moduleId = contentBlockToModule[qa.content_block_id]
+      if (!moduleId || qa.max_score <= 0) continue
+      const key = `${qa.user_id}_${moduleId}`
+      const pct = Math.round((qa.score / qa.max_score) * 100)
+      if (!map[key] || pct > map[key].pct) map[key] = { score: qa.score, max: qa.max_score, pct }
+    }
+    return map
+  }, [quizAttempts, contentBlockToModule])
+
+  // Most recent manual completion per user per module (for certificates recorded outside the app)
+  const manualByUserModule = useMemo(() => {
+    const map: Record<string, ManualCompletion> = {}
+    for (const m of manualCompletions) {
+      const key = `${m.user_id}_${m.module_id}`
+      if (!map[key] || m.completion_date > map[key].completion_date) map[key] = m
+    }
+    return map
+  }, [manualCompletions])
+
+  async function handleRemoveAssignment(assignmentId: string, employeeName: string, moduleTitle: string) {
+    if (!confirm(`Remove "${moduleTitle}" from ${employeeName}? This cannot be undone.`)) return
+    const { error } = await supabase.from('assignments').delete().eq('id', assignmentId)
+    if (error) { toast.error(error.message); return }
+    setRemovedIds(prev => new Set(prev).add(assignmentId))
+    toast.success(`Removed "${moduleTitle}" from ${employeeName}`)
+  }
 
   // Best score per user per block
   const bestScoreByUserBlock = useMemo(() => {
@@ -567,53 +640,104 @@ export function ReportsView({ employees, modules, assignments, sections, progres
                             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Module Detail for {emp.full_name}</p>
                             {empA.length === 0 ? (
                               <p className="text-slate-400 text-sm">No training assignments</p>
-                            ) : empA.map(a => {
-                              const mod = modules.find(m => m.id === a.module_id)
-                              if (!mod) return null
-                              const done = completedByUserModule[`${emp.id}_${a.module_id}`] ?? 0
-                              const total = totalByModule[a.module_id] ?? 0
-                              const modPct = total > 0 ? Math.round((done / total) * 100) : 0
-                              const completedDate = completionDateByUserModule[`${emp.id}_${a.module_id}`]
-                              const empModAttempts = quizAttempts.filter(qa => qa.user_id === emp.id)
-                              const modScores = empModAttempts.map(qa => qa.max_score > 0 ? Math.round((qa.score / qa.max_score) * 100) : 0)
-                              const bestModScore = modScores.length > 0 ? Math.max(...modScores) : null
+                            ) : (
+                              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                                <table className="w-full text-xs">
+                                  <thead className="bg-slate-100">
+                                    <tr>
+                                      <th className="text-left px-3 py-2 font-medium text-slate-600">Section</th>
+                                      <th className="text-center px-3 py-2 font-medium text-slate-600">Read</th>
+                                      <th className="text-center px-3 py-2 font-medium text-slate-600">Watch</th>
+                                      <th className="text-center px-3 py-2 font-medium text-slate-600">Test</th>
+                                      <th className="text-center px-3 py-2 font-medium text-slate-600">Score</th>
+                                      <th className="text-center px-3 py-2 font-medium text-slate-600">Certificate</th>
+                                      <th className="text-center px-3 py-2 font-medium text-slate-600">Completed</th>
+                                      <th className="text-center px-3 py-2 font-medium text-slate-600">Review</th>
+                                      <th className="text-center px-3 py-2 font-medium text-slate-600">Deadline</th>
+                                      <th className="text-center px-3 py-2 font-medium text-slate-600">Remove</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-100">
+                                    {empA.map(a => {
+                                      const mod = modules.find(m => m.id === a.module_id)
+                                      if (!mod) return null
+                                      const done = completedByUserModule[`${emp.id}_${a.module_id}`] ?? 0
+                                      const total = totalByModule[a.module_id] ?? 0
+                                      const isComplete = total > 0 && done >= total
+                                      const key = `${emp.id}_${a.module_id}`
+                                      const types = contentTypesByModule[a.module_id] ?? { text: false, video: false, quiz: false }
+                                      const manual = manualByUserModule[key]
+                                      const rawScore = manual
+                                        ? { score: manual.score, max: manual.max_score }
+                                        : bestRawScoreByUserModule[key]
+                                      const hasCertificate = !!manual || isComplete
+                                      const completedDate = manual ? manual.completion_date : completionDateByUserModule[key]
+                                      const isOverdue = !!a.due_date && a.due_date < today && !isComplete
 
-                              return (
-                                <div key={a.id} className="flex items-center gap-4 bg-white rounded-lg border border-slate-200 p-3">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1.5">
-                                      <p className="font-medium text-slate-800 text-sm">{mod.title}</p>
-                                      <Badge variant={modPct === 100 ? 'success' : modPct > 0 ? 'warning' : 'outline'} className="text-xs">
-                                        {modPct === 100 ? 'Complete' : modPct > 0 ? `${modPct}%` : 'Not started'}
-                                      </Badge>
-                                      {a.due_date && a.due_date < today && modPct < 100 && (
-                                        <Badge variant="danger" className="text-xs">Overdue</Badge>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <Progress value={modPct} className="flex-1 h-1" />
-                                      <span className="text-xs text-slate-400 shrink-0">{done}/{total} sections</span>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-4 shrink-0 text-xs text-slate-500">
-                                    {bestModScore !== null && (
-                                      <div className="flex items-center gap-1">
-                                        <Trophy className="h-3.5 w-3.5 text-amber-500" />
-                                        <span>Best: {bestModScore}%</span>
-                                      </div>
-                                    )}
-                                    {completedDate && (
-                                      <span>Done: {formatDate(completedDate)}</span>
-                                    )}
-                                    {a.due_date && (
-                                      <span className={a.due_date < today && modPct < 100 ? 'text-red-500' : ''}>
-                                        Due: {formatDate(a.due_date)}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              )
-                            })}
+                                      const typeCell = (present: boolean) =>
+                                        present
+                                          ? <Check className="h-4 w-4 text-green-500 mx-auto" />
+                                          : <X className="h-4 w-4 text-slate-300 mx-auto" />
+
+                                      return (
+                                        <tr key={a.id} className="hover:bg-slate-50">
+                                          <td className="px-3 py-2.5">
+                                            <p className="font-medium text-slate-800">{mod.title}</p>
+                                            <p className="text-slate-400">{getCategoryLabel(mod.category)}</p>
+                                          </td>
+                                          <td className="px-3 py-2.5">{typeCell(types.text)}</td>
+                                          <td className="px-3 py-2.5">{typeCell(types.video)}</td>
+                                          <td className="px-3 py-2.5">{typeCell(types.quiz)}</td>
+                                          <td className="px-3 py-2.5 text-center">
+                                            {rawScore
+                                              ? <span className={rawScore.max > 0 && (rawScore.score / rawScore.max) < 0.7 ? 'text-red-500' : 'text-slate-700'}>
+                                                  {rawScore.score}/{rawScore.max} ({rawScore.max > 0 ? Math.round((rawScore.score / rawScore.max) * 100) : 0}%)
+                                                </span>
+                                              : <span className="text-slate-300">—</span>}
+                                          </td>
+                                          <td className="px-3 py-2.5 text-center">
+                                            {hasCertificate ? (
+                                              <a
+                                                href={`/api/certificate?userId=${emp.id}&moduleId=${a.module_id}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                                              >
+                                                <Award className="h-3.5 w-3.5" /> View
+                                              </a>
+                                            ) : <span className="text-slate-300">—</span>}
+                                          </td>
+                                          <td className="px-3 py-2.5 text-center text-slate-500">
+                                            {completedDate ? formatDate(completedDate) : '—'}
+                                          </td>
+                                          <td className="px-3 py-2.5 text-center">
+                                            <Link
+                                              href={`/training/${a.module_id}`}
+                                              target="_blank"
+                                              className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                                            >
+                                              <ExternalLink className="h-3.5 w-3.5" /> Review
+                                            </Link>
+                                          </td>
+                                          <td className={`px-3 py-2.5 text-center ${isOverdue ? 'text-red-500 font-medium' : 'text-slate-500'}`}>
+                                            {a.due_date ? formatDate(a.due_date) : '—'}
+                                          </td>
+                                          <td className="px-3 py-2.5 text-center">
+                                            <button
+                                              onClick={() => handleRemoveAssignment(a.id, emp.full_name, mod.title)}
+                                              className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                              title="Remove this training"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
 
                             {/* Quiz attempt history */}
                             {quizAttempts.filter(qa => qa.user_id === emp.id).length > 0 && (

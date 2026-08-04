@@ -30,6 +30,7 @@ export default async function ReportsPage() {
     { data: modules },
     { data: assignments },
     { data: sections },
+    { data: contentBlocks },
     { data: allProgress },
     { data: quizAttempts },
     { data: manualCompletions },
@@ -39,6 +40,7 @@ export default async function ReportsPage() {
       .select('id, user_id, module_id, assigned_at, due_date')
       .in('user_id', employeeIds.length ? employeeIds : ['']),
     supabase.from('sections').select('id, module_id, title, order_index'),
+    supabase.from('content_blocks').select('id, section_id, type'),
     supabase.from('section_progress')
       .select('user_id, section_id, completed_at, sections!inner(module_id)')
       .in('user_id', employeeIds.length ? employeeIds : ['']),
@@ -61,6 +63,7 @@ export default async function ReportsPage() {
           modules={modules ?? []}
           assignments={(assignments ?? []) as any[]}
           sections={(sections ?? []) as any[]}
+          contentBlocks={(contentBlocks ?? []) as any[]}
           progress={(allProgress ?? []) as any[]}
           quizAttempts={(quizAttempts ?? []) as any[]}
           manualCompletions={(manualCompletions ?? []) as any[]}
