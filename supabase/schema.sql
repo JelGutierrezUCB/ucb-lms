@@ -28,10 +28,20 @@ create table modules (
   updated_at timestamptz default now()
 );
 
--- Sections within a module
+-- Groups: optional mid-level "folder" to organize related sections within a module
+create table groups (
+  id uuid primary key default gen_random_uuid(),
+  module_id uuid references modules(id) on delete cascade not null,
+  title text not null,
+  order_index int not null default 0,
+  created_at timestamptz default now()
+);
+
+-- Sections within a module (a "training"). May optionally belong to a group.
 create table sections (
   id uuid primary key default gen_random_uuid(),
   module_id uuid references modules(id) on delete cascade not null,
+  group_id uuid references groups(id) on delete set null,
   title text not null,
   order_index int not null default 0,
   created_at timestamptz default now()
@@ -81,6 +91,7 @@ create table quiz_attempts (
 -- RLS
 alter table profiles enable row level security;
 alter table modules enable row level security;
+alter table groups enable row level security;
 alter table sections enable row level security;
 alter table content_blocks enable row level security;
 alter table assignments enable row level security;
@@ -115,6 +126,19 @@ create policy "modules_update" on modules for update using (
   exists (select 1 from profiles where id = auth.uid() and role = 'admin')
 );
 create policy "modules_delete" on modules for delete using (
+  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+);
+
+-- Group policies
+create policy "groups_select" on groups for select using (
+  exists (
+    select 1 from modules m
+    join profiles p on p.id = auth.uid()
+    where m.id = groups.module_id
+    and (m.is_published = true or p.role in ('admin', 'manager'))
+  )
+);
+create policy "groups_all_admin" on groups for all using (
   exists (select 1 from profiles where id = auth.uid() and role = 'admin')
 );
 

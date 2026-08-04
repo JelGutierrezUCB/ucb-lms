@@ -25,9 +25,18 @@ export interface Module {
   updated_at: string
 }
 
+export interface Group {
+  id: string
+  module_id: string
+  title: string
+  order_index: number
+  created_at: string
+}
+
 export interface Section {
   id: string
   module_id: string
+  group_id?: string | null
   title: string
   order_index: number
   created_at: string
@@ -51,9 +60,13 @@ export interface VideoContent {
   caption?: string
 }
 
+export type QuestionType = 'multiple_choice' | 'long_answer'
+
 export interface QuizQuestion {
   id: string
+  type?: QuestionType // defaults to 'multiple_choice' when absent, for backward compatibility
   question: string
+  // multiple_choice only:
   options: string[]
   correct_index: number
   explanation?: string
@@ -99,7 +112,7 @@ export interface QuizAttempt {
   content_block_id: string
   score: number
   max_score: number
-  answers: number[]
+  answers: (number | string | undefined)[] // number = MC option index, string = long-answer text
   completed_at: string
 }
 

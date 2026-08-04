@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
 import { Plus, Trash2, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import type { QuizContent, QuizQuestion } from '@/types'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import type { QuizContent, QuizQuestion, QuestionType } from '@/types'
 
 interface Props {
   content: QuizContent
@@ -28,6 +28,7 @@ export function QuizBlockEditor({ content, onChange }: Props) {
   const addQuestion = () => {
     const newQ: QuizQuestion = {
       id: generateQId(),
+      type: 'multiple_choice',
       question: '',
       options: ['', '', '', ''],
       correct_index: 0,
@@ -38,6 +39,14 @@ export function QuizBlockEditor({ content, onChange }: Props) {
 
   const removeQuestion = (id: string) => {
     onChange({ ...content, questions: content.questions.filter(q => q.id !== id) })
+  }
+
+  const setQuestionType = (id: string, type: QuestionType) => {
+    if (type === 'multiple_choice') {
+      updateQuestion(id, { type, options: ['', '', '', ''], correct_index: 0 })
+    } else {
+      updateQuestion(id, { type })
+    }
   }
 
   const updateOption = (qId: string, optIdx: number, value: string) => {
@@ -79,76 +88,101 @@ export function QuizBlockEditor({ content, onChange }: Props) {
           />
         </div>
         <div className="self-end text-sm text-slate-500">
-          Employees must score at least {content.passing_score}% to pass
+          Employees must score at least {content.passing_score}% to pass.
+          Long-answer questions aren&apos;t auto-graded — they&apos;re recorded for manual review
+          and don&apos;t count toward the score.
         </div>
       </div>
 
       <div className="space-y-4">
-        {content.questions.map((q, qi) => (
-          <div key={q.id} className="rounded-xl border border-slate-200 p-4 space-y-3">
-            <div className="flex items-start justify-between gap-2">
-              <Label className="text-base">Question {qi + 1}</Label>
-              <button
-                onClick={() => removeQuestion(q.id)}
-                className="p-1 text-slate-400 hover:text-red-600 transition-colors"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-
-            <Textarea
-              value={q.question}
-              onChange={e => updateQuestion(q.id, { question: e.target.value })}
-              placeholder="Enter your question here..."
-              rows={2}
-            />
-
-            <div className="space-y-2">
-              <Label className="text-sm text-slate-600">Answer Options (click the checkmark to mark correct answer)</Label>
-              {q.options.map((opt, oi) => (
-                <div key={oi} className="flex items-center gap-2">
+        {content.questions.map((q, qi) => {
+          const type: QuestionType = q.type ?? 'multiple_choice'
+          return (
+            <div key={q.id} className="rounded-xl border border-slate-200 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <Label className="text-base">Question {qi + 1}</Label>
+                <div className="flex items-center gap-2">
+                  <Select value={type} onValueChange={v => setQuestionType(q.id, v as QuestionType)}>
+                    <SelectTrigger className="w-40 h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
+                      <SelectItem value="long_answer">Long Answer</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <button
-                    onClick={() => updateQuestion(q.id, { correct_index: oi })}
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-                      q.correct_index === oi
-                        ? 'border-green-500 bg-green-500 text-white'
-                        : 'border-slate-300 text-slate-300 hover:border-green-400'
-                    }`}
+                    onClick={() => removeQuestion(q.id)}
+                    className="p-1 text-slate-400 hover:text-red-600 transition-colors"
                   >
-                    <Check className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4" />
                   </button>
-                  <Input
-                    value={opt}
-                    onChange={e => updateOption(q.id, oi, e.target.value)}
-                    placeholder={`Option ${oi + 1}`}
-                  />
-                  {q.options.length > 2 && (
-                    <button
-                      onClick={() => removeOption(q.id, oi)}
-                      className="p-1 text-slate-400 hover:text-red-500 transition-colors shrink-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
                 </div>
-              ))}
-              {q.options.length < 6 && (
-                <Button variant="ghost" size="sm" onClick={() => addOption(q.id)}>
-                  <Plus className="h-3.5 w-3.5 mr-1" /> Add Option
-                </Button>
+              </div>
+
+              <Textarea
+                value={q.question}
+                onChange={e => updateQuestion(q.id, { question: e.target.value })}
+                placeholder="Enter your question here..."
+                rows={2}
+              />
+
+              {type === 'multiple_choice' ? (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-sm text-slate-600">Answer Options (click the checkmark to mark correct answer)</Label>
+                    {q.options.map((opt, oi) => (
+                      <div key={oi} className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateQuestion(q.id, { correct_index: oi })}
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                            q.correct_index === oi
+                              ? 'border-green-500 bg-green-500 text-white'
+                              : 'border-slate-300 text-slate-300 hover:border-green-400'
+                          }`}
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
+                        <Input
+                          value={opt}
+                          onChange={e => updateOption(q.id, oi, e.target.value)}
+                          placeholder={`Option ${oi + 1}`}
+                        />
+                        {q.options.length > 2 && (
+                          <button
+                            onClick={() => removeOption(q.id, oi)}
+                            className="p-1 text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {q.options.length < 6 && (
+                      <Button variant="ghost" size="sm" onClick={() => addOption(q.id)}>
+                        <Plus className="h-3.5 w-3.5 mr-1" /> Add Option
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-sm text-slate-600">Explanation (shown after answering)</Label>
+                    <Input
+                      value={q.explanation ?? ''}
+                      onChange={e => updateQuestion(q.id, { explanation: e.target.value })}
+                      placeholder="Why is this the correct answer? (optional)"
+                    />
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                  Employees will answer this in a free-text box. It&apos;s recorded for you to review manually
+                  in Reports — it isn&apos;t auto-graded or scored.
+                </p>
               )}
             </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-sm text-slate-600">Explanation (shown after answering)</Label>
-              <Input
-                value={q.explanation ?? ''}
-                onChange={e => updateQuestion(q.id, { explanation: e.target.value })}
-                placeholder="Why is this the correct answer? (optional)"
-              />
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       <Button variant="outline" onClick={addQuestion}>

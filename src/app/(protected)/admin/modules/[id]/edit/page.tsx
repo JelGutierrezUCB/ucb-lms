@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { ModuleEditor } from '@/components/admin/ModuleEditor'
-import type { Module, Section, ContentBlock } from '@/types'
+import type { Module, Section, ContentBlock, Group } from '@/types'
 
 export default async function EditModulePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -20,6 +20,12 @@ export default async function EditModulePage({ params }: { params: Promise<{ id:
     .single() as { data: Module | null }
 
   if (!module) notFound()
+
+  const { data: groups } = await supabase
+    .from('groups')
+    .select('*')
+    .eq('module_id', id)
+    .order('order_index') as { data: Group[] | null }
 
   const { data: sections } = await supabase
     .from('sections')
@@ -43,7 +49,7 @@ export default async function EditModulePage({ params }: { params: Promise<{ id:
     <div className="flex flex-col flex-1 overflow-auto">
       <Header title={`Edit: ${module.title}`} />
       <main className="flex-1 p-6">
-        <ModuleEditor module={module} initialSections={sectionsWithBlocks} createdBy={user.id} />
+        <ModuleEditor module={module} initialGroups={groups ?? []} initialSections={sectionsWithBlocks} createdBy={user.id} />
       </main>
     </div>
   )

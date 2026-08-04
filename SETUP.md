@@ -122,9 +122,10 @@ with a matching email sent via Resend. A daily cron job (`vercel.json`) checks f
 assignments due the next day and reminds anyone who hasn't finished.
 
 ### Training Modules
-- Each module has **sections**
+- Each module has **sections** (individual trainings), optionally organized into collapsible **groups** (folders) for modules with many sections
 - Each section can have **text blocks**, **video blocks** (YouTube link or direct file upload), and **quiz blocks**
-- Quizzes require a passing score (default 70%) before the section can be marked complete
+- Quiz questions can be **multiple choice** (auto-graded) or **long answer** (free text, recorded for manual review in Reports — doesn't affect the auto-graded score)
+- Quizzes require a passing score (default 70%) based on multiple-choice questions before the section can be marked complete
 - Progress is tracked per user per section
 
 ---

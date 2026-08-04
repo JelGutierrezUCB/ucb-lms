@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCircle, XCircle, HelpCircle } from 'lucide-react'
+import { CheckCircle, XCircle, HelpCircle, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import type { ContentBlock, QuizContent } from '@/types'
 
@@ -16,19 +17,35 @@ interface Props {
 
 export function QuizViewer({ block, userId, onPass }: Props) {
   const content = block.content as QuizContent
-  const [answers, setAnswers] = useState<Record<number, number>>({})
+  const [answers, setAnswers] = useState<Record<number, number | string>>({})
   const [submitted, setSubmitted] = useState(false)
   const [score, setScore] = useState(0)
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
+  const mcQuestions = content.questions.filter(q => (q.type ?? 'multiple_choice') === 'multiple_choice')
   const totalQ = content.questions.length
-  const answeredQ = Object.keys(answers).length
-  const allAnswered = answeredQ === totalQ
+  const allAnswered = content.questions.every((q, qi) => {
+    const a = answers[qi]
+    return (q.type ?? 'multiple_choice') === 'long_answer'
+      ? typeof a === 'string' && a.trim().length > 0
+      : a !== undefined
+  })
+  const answeredQ = content.questions.filter((q, qi) => {
+    const a = answers[qi]
+    return (q.type ?? 'multiple_choice') === 'long_answer'
+      ? typeof a === 'string' && a.trim().length > 0
+      : a !== undefined
+  }).length
 
   const handleSelect = (qi: number, oi: number) => {
     if (submitted) return
     setAnswers(prev => ({ ...prev, [qi]: oi }))
+  }
+
+  const handleTextChange = (qi: number, value: string) => {
+    if (submitted) return
+    setAnswers(prev => ({ ...prev, [qi]: value }))
   }
 
   const handleSubmit = async () => {
@@ -36,9 +53,13 @@ export function QuizViewer({ block, userId, onPass }: Props) {
     setSaving(true)
 
     const correctCount = content.questions.reduce((acc, q, qi) => {
+      if ((q.type ?? 'multiple_choice') !== 'multiple_choice') return acc
       return acc + (answers[qi] === q.correct_index ? 1 : 0)
     }, 0)
-    const scorePercent = Math.round((correctCount / totalQ) * 100)
+    // Long-answer-only quizzes have nothing to auto-grade — treat as passed once submitted.
+    const scorePercent = mcQuestions.length > 0
+      ? Math.round((correctCount / mcQuestions.length) * 100)
+      : 100
 
     const answerArray = content.questions.map((_, qi) => answers[qi])
 
@@ -46,7 +67,7 @@ export function QuizViewer({ block, userId, onPass }: Props) {
       user_id: userId,
       content_block_id: block.id,
       score: correctCount,
-      max_score: totalQ,
+      max_score: mcQuestions.length,
       answers: answerArray,
     })
 
@@ -55,7 +76,7 @@ export function QuizViewer({ block, userId, onPass }: Props) {
     setSaving(false)
 
     if (scorePercent >= content.passing_score) {
-      toast.success(`Quiz passed with ${scorePercent}%!`)
+      toast.success(mcQuestions.length > 0 ? `Quiz passed with ${scorePercent}%!` : 'Answers submitted!')
       onPass()
     } else {
       toast.error(`Score: ${scorePercent}%. Need ${content.passing_score}% to pass.`)
@@ -106,9 +127,33 @@ export function QuizViewer({ block, userId, onPass }: Props) {
       )}
 
       {content.questions.map((q, qi) => {
+        const isLongAnswer = (q.type ?? 'multiple_choice') === 'long_answer'
         const selected = answers[qi]
-        const isCorrect = submitted && selected === q.correct_index
-        const isWrong = submitted && selected !== undefined && selected !== q.correct_index
+        const isCorrect = submitted && !isLongAnswer && selected === q.correct_index
+        const isWrong = submitted && !isLongAnswer && selected !== undefined && selected !== q.correct_index
+
+        if (isLongAnswer) {
+          return (
+            <div key={q.id} className="space-y-3">
+              <p className="font-medium text-slate-900">
+                {qi + 1}. {q.question}
+              </p>
+              <Textarea
+                value={typeof selected === 'string' ? selected : ''}
+                onChange={e => handleTextChange(qi, e.target.value)}
+                disabled={submitted}
+                placeholder="Type your answer here..."
+                rows={4}
+              />
+              {submitted && (
+                <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-600 flex items-start gap-2">
+                  <MessageSquare className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+                  <span>Submitted for manual review — this doesn&apos;t affect your score.</span>
+                </div>
+              )}
+            </div>
+          )
+        }
 
         return (
           <div key={q.id} className="space-y-3">
