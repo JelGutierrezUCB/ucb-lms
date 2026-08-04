@@ -170,7 +170,7 @@ export function ModuleList({ initialModules }: { initialModules: Module[] }) {
           <DialogHeader>
             <DialogTitle>Delete Module</DialogTitle>
             <DialogDescription>
-              Delete <strong>{deleteModule?.title}</strong>? All sections, content, and progress will be permanently removed.
+              Delete <strong>{deleteModule?.title}</strong>? All trainings, content, and progress will be permanently removed.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

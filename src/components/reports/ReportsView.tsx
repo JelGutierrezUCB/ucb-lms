@@ -645,7 +645,7 @@ export function ReportsView({ employees, modules, assignments: rawAssignments, s
                                 <table className="w-full text-xs">
                                   <thead className="bg-slate-100">
                                     <tr>
-                                      <th className="text-left px-3 py-2 font-medium text-slate-600">Section</th>
+                                      <th className="text-left px-3 py-2 font-medium text-slate-600">Training</th>
                                       <th className="text-center px-3 py-2 font-medium text-slate-600">Read</th>
                                       <th className="text-center px-3 py-2 font-medium text-slate-600">Watch</th>
                                       <th className="text-center px-3 py-2 font-medium text-slate-600">Test</th>

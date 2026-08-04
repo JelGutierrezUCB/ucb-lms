@@ -343,7 +343,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
               onChange={e => { e.stopPropagation(); updateSection(section.id, e.target.value) }}
               onClick={e => e.stopPropagation()}
               className="border-0 bg-transparent p-0 h-auto text-base font-semibold focus:ring-0 focus:outline-none"
-              placeholder="Section title..."
+              placeholder="Training title..."
             />
           </div>
           {presenceBadges(section)}
@@ -538,27 +538,31 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900">
-            Content <span className="text-slate-400 font-normal">({sections.length} section{sections.length !== 1 ? 's' : ''}, {groups.length} group{groups.length !== 1 ? 's' : ''})</span>
+            Trainings <span className="text-slate-400 font-normal">({sections.length} training{sections.length !== 1 ? 's' : ''}{groups.length > 0 ? `, ${groups.length} group${groups.length !== 1 ? 's' : ''}` : ''})</span>
           </h2>
           <div className="flex items-center gap-2">
+            <Button onClick={() => addSection(null)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Training
+            </Button>
             <Button variant="outline" onClick={addGroup}>
               <Folder className="h-4 w-4 mr-2" />
               Add Group
             </Button>
-            <Button variant="outline" onClick={() => addSection(null)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Section
-            </Button>
           </div>
         </div>
+        <p className="text-sm text-slate-500 -mt-2">
+          A <strong>training</strong> is a lesson employees complete (text, video, and/or a quiz). A <strong>group</strong> is
+          an optional folder for organizing many trainings — only add one if you have several related trainings to cluster together.
+        </p>
 
         {sections.length === 0 && groups.length === 0 && (
           <Card>
             <div className="text-center py-12">
-              <p className="text-slate-500">No content yet. Add a section to get started, or a group to organize related sections together.</p>
+              <p className="text-slate-500">No trainings yet. Add your first training to get started.</p>
               <Button className="mt-4" onClick={() => addSection(null)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Add Section
+                Add Training
               </Button>
             </div>
           </Card>
@@ -584,7 +588,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
                   className="border-0 bg-transparent p-0 h-auto flex-1 text-base font-bold focus:ring-0 focus:outline-none"
                 />
                 <Badge variant="outline" className="shrink-0">
-                  {groupSections.length} section{groupSections.length !== 1 ? 's' : ''}
+                  {groupSections.length} training{groupSections.length !== 1 ? 's' : ''}
                 </Badge>
                 <div className="flex items-center gap-1 shrink-0">
                   <button
@@ -604,7 +608,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
                   <button
                     onClick={e => { e.stopPropagation(); removeGroup(group.id) }}
                     className="p-1 rounded text-slate-400 hover:text-red-600 ml-1"
-                    title="Delete group (sections move to top-level)"
+                    title="Delete group (trainings move to top-level)"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -614,11 +618,11 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
               {isExpanded && (
                 <div className="px-5 pb-5 space-y-3 bg-slate-50/60">
                   {groupSections.length === 0 ? (
-                    <p className="text-sm text-slate-400 py-2">No sections in this group yet.</p>
+                    <p className="text-sm text-slate-400 py-2">No trainings in this group yet.</p>
                   ) : groupSections.map(s => renderSection(s, groupSections))}
                   <Button variant="outline" size="sm" onClick={() => addSection(group.id)}>
                     <Plus className="h-3.5 w-3.5 mr-1.5" />
-                    Add Section to Group
+                    Add Training to Group
                   </Button>
                 </div>
               )}
