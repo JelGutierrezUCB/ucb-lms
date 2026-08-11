@@ -58,6 +58,16 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     new Set(initialGroups.map(g => g.id))
   )
+  const pendingScrollId = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!pendingScrollId.current) return
+    const id = pendingScrollId.current
+    pendingScrollId.current = null
+    requestAnimationFrame(() => {
+      document.getElementById(`training-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }, [sections])
 
   const toggleSection = (id: string) => {
     setExpandedSections(prev => {
@@ -131,9 +141,13 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
     }
     setSections(prev => [...prev, newSection])
     setExpandedSections(prev => new Set([...prev, id]))
+    pendingScrollId.current = id
   }
 
-  // Jump straight into adding a training when arriving via the "Add Training" button on the module list
+  // Jump straight into adding a training when arriving via the "Add Training" button on the module list.
+  // We clean the "?addTraining=1" param with the plain History API (not router.replace) so we don't
+  // trigger a Next.js navigation — that would re-fetch this page from the server and wipe out the
+  // training we just added locally, since it hasn't been saved yet.
   const searchParams = useSearchParams()
   const autoAddedRef = useRef(false)
   useEffect(() => {
@@ -141,7 +155,8 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
     if (searchParams.get('addTraining') === '1') {
       autoAddedRef.current = true
       addSection(null)
-      router.replace(existingModule ? `/admin/modules/${existingModule.id}/edit` : '/admin/modules/new')
+      const cleanUrl = existingModule ? `/admin/modules/${existingModule.id}/edit` : '/admin/modules/new'
+      window.history.replaceState(null, '', cleanUrl)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
@@ -343,7 +358,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
     const isExpanded = expandedSections.has(section.id)
     const siblingIdx = siblings.findIndex(s => s.id === section.id)
     return (
-      <Card key={section.id}>
+      <Card key={section.id} id={`training-${section.id}`}>
         {/* Section header */}
         <div
           className="flex items-center gap-3 px-5 py-4 cursor-pointer hover:bg-slate-50 rounded-xl"
