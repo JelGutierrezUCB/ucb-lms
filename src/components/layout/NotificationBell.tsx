@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Bell, CheckCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -114,6 +115,13 @@ export function NotificationBell({ userId }: { userId: string }) {
             ))
           )}
         </div>
+        <DropdownMenuSeparator className="m-0" />
+        <Link
+          href="/notifications"
+          className="block px-3 py-2.5 text-center text-sm text-blue-600 hover:bg-slate-50 transition-colors"
+        >
+          View all notifications
+        </Link>
       </DropdownMenuContent>
     </DropdownMenu>
   )

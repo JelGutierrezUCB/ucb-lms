@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Plus, Pencil, Trash2, Eye, EyeOff, BookOpen, Clock, UserPlus, GraduationCap } from 'lucide-react'
+import { Plus, Pencil, Trash2, Eye, EyeOff, BookOpen, Clock, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -114,47 +114,53 @@ export function ModuleList({ initialModules }: { initialModules: Module[] }) {
                   <span>Created {formatDate(mod.created_at)}</span>
                 </div>
 
-                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100">
-                  <Link href={`/admin/modules/${mod.id}/edit`} className="flex-1">
-                    <Button variant="outline" size="sm" className="w-full">
-                      <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                      Edit Module
-                    </Button>
-                  </Link>
-                  <Link href={`/admin/modules/${mod.id}/edit?addTraining=1`} className="flex-1">
-                    <Button size="sm" className="w-full">
-                      <GraduationCap className="h-3.5 w-3.5 mr-1.5" />
-                      Add Training
-                    </Button>
-                  </Link>
-                  {mod.is_published && (
+                <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Link href={`/admin/modules/${mod.id}/edit`} className="flex-1">
+                      <Button variant="outline" size="sm" className="w-full">
+                        <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                        Edit Module
+                      </Button>
+                    </Link>
+                    <Link href={`/admin/modules/${mod.id}/edit?addTraining=1`}>
+                      <Button size="sm" title="Add Training" className="px-2.5">
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {mod.is_published && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAssigningModule(mod)}
+                        title="Assign to employees"
+                        className="gap-1.5"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        Assign
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setAssigningModule(mod)}
-                      title="Assign to employees"
+                      onClick={() => handleTogglePublish(mod)}
+                      title={mod.is_published ? 'Unpublish' : 'Publish'}
                       className="gap-1.5"
                     >
-                      <UserPlus className="h-3.5 w-3.5" />
-                      Assign
+                      {mod.is_published ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      {mod.is_published ? 'Unpublish' : 'Publish'}
                     </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleTogglePublish(mod)}
-                    title={mod.is_published ? 'Unpublish' : 'Publish'}
-                  >
-                    {mod.is_published ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDeleteModule(mod)}
-                    className="text-red-400 hover:text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDeleteModule(mod)}
+                      className="gap-1.5 ml-auto text-red-500 border-red-200 hover:text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove Module
+                    </Button>
+                  </div>
                 </div>
               </div>
             </Card>
