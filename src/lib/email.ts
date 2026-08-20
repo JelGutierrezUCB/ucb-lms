@@ -48,6 +48,18 @@ export function welcomeEmailHtml(opts: { fullName: string; email: string; passwo
   `)
 }
 
+export function passwordChangedEmailHtml(opts: { fullName: string; password: string; loginUrl: string }) {
+  return wrapper('Your password was reset', `
+    <p style="color: #475569; line-height: 1.6;">Hi ${opts.fullName},</p>
+    <p style="color: #475569; line-height: 1.6;">An admin reset your UCB Training Portal password. Here's your new password:</p>
+    <div style="background: #f8fafc; border-radius: 8px; padding: 16px; margin: 16px 0;">
+      <p style="margin: 4px 0; color: #1e293b;"><strong>New password:</strong> ${opts.password}</p>
+    </div>
+    <a href="${opts.loginUrl}" style="display: inline-block; background: #1e40af; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">Log In</a>
+    <p style="color: #94a3b8; font-size: 13px; margin-top: 16px;">If you didn't expect this, contact your admin.</p>
+  `)
+}
+
 export function notificationEmailHtml(opts: { fullName: string; title: string; message: string; link: string }) {
   return wrapper(opts.title, `
     <p style="color: #475569; line-height: 1.6;">Hi ${opts.fullName},</p>

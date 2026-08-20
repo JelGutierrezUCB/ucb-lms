@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Search, Pencil, Trash2, UserX, UserCheck, EyeOff, Eye, Upload } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, UserX, UserCheck, EyeOff, Eye, Upload, KeyRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { Profile, Role } from '@/types'
 import { getRoleLabel, formatDate } from '@/lib/utils'
 import { CsvImportDialog } from './CsvImportDialog'
+import { ResetPasswordDialog } from './ResetPasswordDialog'
 
 interface Props {
   initialProfiles: Profile[]
@@ -39,6 +40,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
   const [showImport, setShowImport] = useState(false)
   const [editUser, setEditUser] = useState<Profile | null>(null)
   const [deleteUser, setDeleteUser] = useState<Profile | null>(null)
+  const [resetPasswordUser, setResetPasswordUser] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
@@ -274,6 +276,13 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                             >
                               <Pencil className="h-4 w-4" />
                             </button>
+                            <button
+                              onClick={() => setResetPasswordUser(user)}
+                              className="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              title="Reset password"
+                            >
+                              <KeyRound className="h-4 w-4" />
+                            </button>
                             {user.id !== currentUserId && (
                               <>
                                 <button
@@ -430,6 +439,11 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ResetPasswordDialog
+        user={resetPasswordUser}
+        onOpenChange={open => !open && setResetPasswordUser(null)}
+      />
 
       <CsvImportDialog
         open={showImport}
