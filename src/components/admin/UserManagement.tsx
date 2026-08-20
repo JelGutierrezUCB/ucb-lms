@@ -19,6 +19,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Profile, Role } from '@/types'
+import { COMPANIES, COMPANY_DEPARTMENTS } from '@/types'
 import { getRoleLabel, formatDate } from '@/lib/utils'
 import { CsvImportDialog } from './CsvImportDialog'
 import { ResetPasswordDialog } from './ResetPasswordDialog'
@@ -49,6 +50,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
     email: '',
     password: '',
     role: 'employee' as Role,
+    company: '',
     department: '',
     manager_id: '',
     is_active: true,
@@ -68,7 +70,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
   const inactiveCount = profiles.filter(p => p.is_active === false).length
 
   const resetForm = () => setForm({
-    full_name: '', email: '', password: '', role: 'employee', department: '', manager_id: '', is_active: true,
+    full_name: '', email: '', password: '', role: 'employee', company: '', department: '', manager_id: '', is_active: true,
   })
 
   const handleCreate = async () => {
@@ -106,6 +108,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
         .update({
           full_name: form.full_name,
           role: form.role,
+          company: form.company || null,
           department: form.department || null,
           manager_id: form.manager_id || null,
           is_active: form.is_active,
@@ -175,6 +178,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
       email: user.email,
       password: '',
       role: user.role,
+      company: user.company ?? '',
       department: user.department ?? '',
       manager_id: user.manager_id ?? '',
       is_active: user.is_active !== false,
@@ -227,6 +231,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Name</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Email</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Role</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Company</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Department</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Manager</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Joined</th>
@@ -238,7 +243,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-10 text-slate-400">No users found</td>
+                  <td colSpan={8} className="text-center py-10 text-slate-400">No users found</td>
                 </tr>
               ) : (
                 filtered.map(user => {
@@ -263,6 +268,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                       <td className="px-4 py-3">
                         <Badge variant={roleBadgeVariant(user.role)}>{getRoleLabel(user.role)}</Badge>
                       </td>
+                      <td className="px-4 py-3 text-slate-600">{user.company ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{user.department ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{manager?.full_name ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-500">{formatDate(user.created_at)}</td>
@@ -371,8 +377,42 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
               </Select>
             </div>
             <div className="space-y-1.5">
+              <Label>Company (optional)</Label>
+              <Select
+                value={form.company || '__none__'}
+                onValueChange={v => setForm(f => ({
+                  ...f,
+                  company: v === '__none__' ? '' : v,
+                  // Clear department if it doesn't belong to the newly chosen company
+                  department: v !== '__none__' && COMPANY_DEPARTMENTS[v]?.includes(f.department) ? f.department : '',
+                }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Select a company" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No company</SelectItem>
+                  {COMPANIES.map(c => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
               <Label>Department (optional)</Label>
-              <Input value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))} placeholder="Warehouse, Sales..." />
+              <Select
+                value={form.department || '__none__'}
+                onValueChange={v => setForm(f => ({ ...f, department: v === '__none__' ? '' : v }))}
+                disabled={!form.company}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={form.company ? 'Select a department' : 'Select a company first'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No department</SelectItem>
+                  {(COMPANY_DEPARTMENTS[form.company] ?? []).map(d => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {form.role === 'employee' && (
               <div className="space-y-1.5">

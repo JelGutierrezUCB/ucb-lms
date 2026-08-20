@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
-  const { full_name, email, password, role, department, manager_id } = body
+  const { full_name, email, password, role, company, department, manager_id } = body
 
   if (!full_name || !email || !password) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
       email,
       full_name,
       role,
+      company: company || null,
       department: department || null,
       manager_id: manager_id || null,
     })

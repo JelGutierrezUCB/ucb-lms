@@ -7,10 +7,21 @@ export interface Profile {
   role: Role
   manager_id: string | null
   department: string | null
+  company: string | null
   is_active: boolean
   created_at: string
   updated_at: string
 }
+
+// Departments available per company, shown in cascading dropdowns when assigning a user.
+export const COMPANY_DEPARTMENTS: Record<string, string[]> = {
+  'UCB Environmental': ['Human Resources', 'Information & Technology', 'Office of the CEO'],
+  'Used Cardboard Boxes': ['Sales & Marketing', 'Facilities', 'Supply Chain'],
+  'UCB Zero Waste': ['Operations Finance & Data', 'Implementation', 'Business Development'],
+  'UCB Pallet Solutions': ['Sales/Sourcing', 'Operations'],
+}
+
+export const COMPANIES = Object.keys(COMPANY_DEPARTMENTS)
 
 export interface Module {
   id: string

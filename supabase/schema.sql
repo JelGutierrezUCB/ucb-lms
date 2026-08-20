@@ -9,6 +9,7 @@ create table profiles (
   role text not null check (role in ('admin', 'manager', 'employee')),
   manager_id uuid references profiles(id),
   department text,
+  company text,
   is_active boolean default true,
   created_at timestamptz default now(),
   updated_at timestamptz default now()

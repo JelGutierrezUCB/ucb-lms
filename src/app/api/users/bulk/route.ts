@@ -15,6 +15,7 @@ interface Row {
   full_name: string
   email: string
   role?: string
+  company?: string
   department?: string
   manager_email?: string
 }
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest) {
     const full_name = (row.full_name ?? '').trim()
     const email = (row.email ?? '').trim().toLowerCase()
     const role = (['admin', 'manager', 'employee'].includes(row.role ?? '') ? row.role : 'employee') as string
+    const company = (row.company ?? '').trim() || null
     const department = (row.department ?? '').trim() || null
     const managerEmail = (row.manager_email ?? '').trim().toLowerCase()
     const manager_id = managerEmail ? emailToId.get(managerEmail) ?? null : null
@@ -77,6 +79,7 @@ export async function POST(req: NextRequest) {
       email,
       full_name,
       role,
+      company,
       department,
       manager_id,
     })

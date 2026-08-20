@@ -19,6 +19,7 @@ interface ParsedRow {
   full_name: string
   email: string
   role: string
+  company: string
   department: string
   manager_email: string
 }
@@ -35,6 +36,7 @@ const HEADER_MAP: Record<string, keyof ParsedRow> = {
   fullname: 'full_name',
   email: 'email',
   role: 'role',
+  company: 'company',
   department: 'department',
   location: 'department',
   manager: 'manager_email',
@@ -42,7 +44,7 @@ const HEADER_MAP: Record<string, keyof ParsedRow> = {
   manageremail: 'manager_email',
 }
 
-const SAMPLE_CSV = 'full_name,email,role,department,manager_email\nJane Smith,jane@ucb.com,employee,Warehouse,manager@ucb.com\n'
+const SAMPLE_CSV = 'full_name,email,role,company,department,manager_email\nJane Smith,jane@ucb.com,employee,UCB Environmental,Human Resources,manager@ucb.com\n'
 
 export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
   const [rows, setRows] = useState<ParsedRow[]>([])
@@ -67,7 +69,7 @@ export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
       transformHeader: h => h.trim().toLowerCase().replace(/\s+/g, '_'),
       complete: res => {
         const parsed: ParsedRow[] = res.data.map(raw => {
-          const row: ParsedRow = { full_name: '', email: '', role: 'employee', department: '', manager_email: '' }
+          const row: ParsedRow = { full_name: '', email: '', role: 'employee', company: '', department: '', manager_email: '' }
           for (const [key, value] of Object.entries(raw)) {
             const mapped = HEADER_MAP[key]
             if (mapped && value) row[mapped] = value.trim()
@@ -129,7 +131,7 @@ export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
         <DialogHeader>
           <DialogTitle>Bulk Import Users from CSV</DialogTitle>
           <DialogDescription>
-            Columns: full_name, email, role (admin/manager/employee), department, manager_email (optional).
+            Columns: full_name, email, role (admin/manager/employee), company, department, manager_email (optional).
             Each user gets a generated password emailed to them.
           </DialogDescription>
         </DialogHeader>
@@ -173,6 +175,7 @@ export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Name</th>
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Email</th>
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Role</th>
+                          <th className="text-left px-3 py-2 font-medium text-slate-600">Company</th>
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Department</th>
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Manager Email</th>
                         </tr>
@@ -183,6 +186,7 @@ export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
                             <td className="px-3 py-1.5">{row.full_name || <span className="text-red-400">missing</span>}</td>
                             <td className="px-3 py-1.5">{row.email || <span className="text-red-400">missing</span>}</td>
                             <td className="px-3 py-1.5">{row.role}</td>
+                            <td className="px-3 py-1.5">{row.company || '—'}</td>
                             <td className="px-3 py-1.5">{row.department || '—'}</td>
                             <td className="px-3 py-1.5">{row.manager_email || '—'}</td>
                           </tr>
