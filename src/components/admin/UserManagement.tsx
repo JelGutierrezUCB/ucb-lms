@@ -36,6 +36,8 @@ const roleBadgeVariant = (role: string) =>
 export function UserManagement({ initialProfiles, currentUserRole, currentUserId }: Props) {
   const [profiles, setProfiles] = useState(initialProfiles)
   const [search, setSearch] = useState('')
+  const [filterCompany, setFilterCompany] = useState('all')
+  const [filterDepartment, setFilterDepartment] = useState('all')
   const [showInactive, setShowInactive] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -59,12 +61,19 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
   const supabase = createClient()
   const managers = profiles.filter(p => p.role === 'manager' || p.role === 'admin')
 
+  // Department options narrow to the selected company's list; "All Companies" shows every department.
+  const departmentOptions = filterCompany === 'all'
+    ? Array.from(new Set(Object.values(COMPANY_DEPARTMENTS).flat()))
+    : (COMPANY_DEPARTMENTS[filterCompany] ?? [])
+
   const filtered = profiles.filter(p => {
     const matchesSearch =
       p.full_name.toLowerCase().includes(search.toLowerCase()) ||
       p.email.toLowerCase().includes(search.toLowerCase())
     const matchesStatus = showInactive ? true : (p.is_active !== false)
-    return matchesSearch && matchesStatus
+    const matchesCompany = filterCompany === 'all' || p.company === filterCompany
+    const matchesDepartment = filterDepartment === 'all' || p.department === filterDepartment
+    return matchesSearch && matchesStatus && matchesCompany && matchesDepartment
   })
 
   const inactiveCount = profiles.filter(p => p.is_active === false).length
@@ -199,6 +208,33 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
               className="pl-9"
             />
           </div>
+          <Select
+            value={filterCompany}
+            onValueChange={v => {
+              setFilterCompany(v)
+              // Reset department filter if it doesn't belong to the newly chosen company
+              if (v !== 'all' && !COMPANY_DEPARTMENTS[v]?.includes(filterDepartment)) {
+                setFilterDepartment('all')
+              }
+            }}
+          >
+            <SelectTrigger className="w-44 shrink-0"><SelectValue placeholder="All Companies" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Companies</SelectItem>
+              {COMPANIES.map(c => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+            <SelectTrigger className="w-48 shrink-0"><SelectValue placeholder="All Departments" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Departments</SelectItem>
+              {departmentOptions.map(d => (
+                <SelectItem key={d} value={d}>{d}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             variant={showInactive ? 'primary' : 'outline'}
             size="sm"
