@@ -15,10 +15,10 @@ export interface Profile {
 
 // Departments available per company, shown in cascading dropdowns when assigning a user.
 export const COMPANY_DEPARTMENTS: Record<string, string[]> = {
-  'UCB Environmental': ['Human Resources', 'Information & Technology', 'Office of the CEO'],
-  'Used Cardboard Boxes': ['Sales & Marketing', 'Facilities', 'Supply Chain'],
-  'UCB Zero Waste': ['Operations Finance & Data', 'Implementation', 'Business Development'],
-  'UCB Pallet Solutions': ['Sales/Sourcing', 'Operations'],
+  UCBEnvironmental: ['Human Resources', 'Information & Technology', 'Office of the CEO'],
+  UsedCardboardBoxes: ['Sales & Marketing', 'Facilities', 'Supply Chain'],
+  UCBZeroWaste: ['Operations Finance & Data', 'Implementation', 'Business Development'],
+  UCBPalletSolutions: ['Sales/Sourcing', 'Operations'],
 }
 
 export const COMPANIES = Object.keys(COMPANY_DEPARTMENTS)

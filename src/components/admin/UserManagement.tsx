@@ -229,7 +229,6 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Name</th>
-                <th className="text-left px-4 py-3 text-slate-600 font-medium">Email</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Role</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Company</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Department</th>
@@ -243,7 +242,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-10 text-slate-400">No users found</td>
+                  <td colSpan={7} className="text-center py-10 text-slate-400">No users found</td>
                 </tr>
               ) : (
                 filtered.map(user => {
@@ -264,7 +263,6 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{user.email}</td>
                       <td className="px-4 py-3">
                         <Badge variant={roleBadgeVariant(user.role)}>{getRoleLabel(user.role)}</Badge>
                       </td>

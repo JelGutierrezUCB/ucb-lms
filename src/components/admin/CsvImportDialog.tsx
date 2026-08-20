@@ -44,7 +44,7 @@ const HEADER_MAP: Record<string, keyof ParsedRow> = {
   manageremail: 'manager_email',
 }
 
-const SAMPLE_CSV = 'full_name,email,role,company,department,manager_email\nJane Smith,jane@ucb.com,employee,UCB Environmental,Human Resources,manager@ucb.com\n'
+const SAMPLE_CSV = 'full_name,email,role,company,department,manager_email\nJane Smith,jane@ucb.com,employee,UCBEnvironmental,Human Resources,manager@ucb.com\n'
 
 export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
   const [rows, setRows] = useState<ParsedRow[]>([])
