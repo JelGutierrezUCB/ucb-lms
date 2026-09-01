@@ -251,7 +251,10 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
               <Upload className="h-4 w-4 mr-2" />
               Import CSV
             </Button>
-            <Button onClick={() => { resetForm(); setShowCreate(true) }}>
+            <Button
+              onClick={() => { resetForm(); setShowCreate(true) }}
+              className="bg-blue-700 hover:bg-blue-800 focus-visible:ring-blue-500"
+            >
               <Plus className="h-4 w-4 mr-2" />
               Add User
             </Button>
