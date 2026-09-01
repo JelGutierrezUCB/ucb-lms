@@ -68,7 +68,13 @@ export function FeedbackDialog({ open, onOpenChange }: Props) {
         />
         <DialogFooter>
           <Button variant="outline" onClick={close}>Cancel</Button>
-          <Button loading={loading} onClick={handleSubmit}>Send Feedback</Button>
+          <Button
+            loading={loading}
+            onClick={handleSubmit}
+            className="bg-blue-700 hover:bg-blue-800 focus-visible:ring-blue-500"
+          >
+            Send Feedback
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
