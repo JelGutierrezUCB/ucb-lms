@@ -13,6 +13,7 @@ import {
   GraduationCap,
   BarChart3,
   MessageSquare,
+  Target,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
@@ -36,6 +37,12 @@ const navItems: NavItem[] = [
     href: '/training',
     label: 'My Training',
     icon: <BookOpen className="h-5 w-5" />,
+    roles: ['admin', 'manager', 'employee'],
+  },
+  {
+    href: '/score-summary',
+    label: 'Score Summary',
+    icon: <Target className="h-5 w-5" />,
     roles: ['admin', 'manager', 'employee'],
   },
   {
