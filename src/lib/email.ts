@@ -67,3 +67,10 @@ export function notificationEmailHtml(opts: { fullName: string; title: string; m
     <a href="${opts.link}" style="display: inline-block; background: #1e40af; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">View in Training Portal</a>
   `)
 }
+
+export function feedbackEmailHtml(opts: { fullName: string; email: string; message: string }) {
+  return wrapper('New feedback submitted', `
+    <p style="color: #475569; line-height: 1.6;"><strong>${opts.fullName}</strong> (${opts.email}) sent this feedback from the Training Portal:</p>
+    <div style="background: #f8fafc; border-radius: 8px; padding: 16px; margin: 16px 0; white-space: pre-wrap; color: #1e293b;">${opts.message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+  `)
+}

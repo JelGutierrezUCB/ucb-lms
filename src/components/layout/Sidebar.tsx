@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -11,9 +12,11 @@ import {
   UserCheck,
   GraduationCap,
   BarChart3,
+  MessageSquare,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
+import { FeedbackDialog } from './FeedbackDialog'
 
 interface NavItem {
   href: string
@@ -70,6 +73,7 @@ const navItems: NavItem[] = [
 export function Sidebar() {
   const pathname = usePathname()
   const { profile } = useAuth()
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
 
   if (!profile) return null
 
@@ -108,7 +112,17 @@ export function Sidebar() {
             </Link>
           )
         })}
+        <button
+          type="button"
+          onClick={() => setFeedbackOpen(true)}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
+        >
+          <MessageSquare className="h-5 w-5" />
+          Tell Us What You Think
+        </button>
       </nav>
+
+      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
 
       {/* User info at bottom */}
       <div className="px-4 py-4 border-t border-slate-700">
