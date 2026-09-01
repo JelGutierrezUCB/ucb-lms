@@ -12,7 +12,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 const variants = {
-  primary: 'bg-green-700 text-white hover:bg-green-800 focus-visible:ring-green-500',
+  primary: 'bg-blue-700 text-white hover:bg-blue-800 focus-visible:ring-blue-500',
   secondary: 'bg-slate-100 text-slate-900 hover:bg-slate-200 focus-visible:ring-slate-400',
   ghost: 'text-slate-700 hover:bg-slate-100 focus-visible:ring-slate-400',
   danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500',
