@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Users, BookOpen, Check } from 'lucide-react'
+import { Users, BookOpen, Check, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -22,6 +22,7 @@ export function BulkAssignDialog({ employees, modules, currentUserId, onClose }:
   const [locationFilter, setLocationFilter] = useState('all')
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set())
   const [selectedModules, setSelectedModules] = useState<Set<string>>(new Set())
+  const [dueDate, setDueDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState(false)
 
@@ -82,14 +83,27 @@ export function BulkAssignDialog({ employees, modules, currentUserId, onClose }:
             user_id: userId,
             module_id: moduleId,
             assigned_by: currentUserId,
+            ...(dueDate ? { due_date: dueDate } : {}),
           })
         }
       }
-      // Upsert to avoid duplicate assignments
+      // Upsert to avoid duplicate assignments (module-level rows only — the
+      // partial unique index this targets is scoped to section_id is null)
       const { error } = await supabase
         .from('assignments')
         .upsert(rows, { onConflict: 'user_id,module_id', ignoreDuplicates: true })
       if (error) throw error
+
+      // Refresh due date for anyone who already had these assignments (upsert
+      // with ignoreDuplicates skips updating existing rows).
+      if (dueDate) {
+        await supabase
+          .from('assignments')
+          .update({ due_date: dueDate })
+          .in('user_id', [...selectedEmployees])
+          .in('module_id', [...selectedModules])
+          .is('section_id', null)
+      }
 
       const userIds = [...selectedEmployees]
       for (const moduleId of selectedModules) {
@@ -98,7 +112,7 @@ export function BulkAssignDialog({ employees, modules, currentUserId, onClose }:
         fetch('/api/notifications/assignment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userIds, moduleId, moduleTitle: mod.title, dueDate: null }),
+          body: JSON.stringify({ userIds, moduleId, moduleTitle: mod.title, dueDate: dueDate || null }),
         }).catch(() => {})
       }
 
@@ -138,6 +152,24 @@ export function BulkAssignDialog({ employees, modules, currentUserId, onClose }:
                 {locations.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Due date */}
+          <div className="flex items-center gap-3">
+            <Label className="flex items-center gap-1.5 shrink-0">
+              <Calendar className="h-3.5 w-3.5" /> Due date
+            </Label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={e => setDueDate(e.target.value)}
+              className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {dueDate && (
+              <button onClick={() => setDueDate('')} className="text-xs text-slate-400 hover:text-slate-600">
+                Clear
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

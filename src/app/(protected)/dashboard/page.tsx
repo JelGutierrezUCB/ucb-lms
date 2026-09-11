@@ -26,14 +26,16 @@ export default async function DashboardPage() {
   if (profile.role === 'admin') redirect('/admin')
   if (profile.role === 'manager') redirect('/manager')
 
-  // Employee dashboard
+  // Employee dashboard. One assignment row per training when specific
+  // trainings (not the whole module) were assigned, so group by module —
+  // this list shows one card per module, not one per assignment row.
   const { data: assignments } = await supabase
     .from('assignments')
     .select('*, module:modules(*)')
     .eq('user_id', user.id)
     .order('assigned_at', { ascending: false }) as { data: (Assignment & { module: Module })[] | null }
 
-  const moduleIds = (assignments ?? []).map(a => a.module_id)
+  const moduleIds = [...new Set((assignments ?? []).map(a => a.module_id))]
 
   const { data: sectionCounts } = await supabase
     .from('sections')
@@ -45,26 +47,57 @@ export default async function DashboardPage() {
     .select('section_id, sections!inner(module_id)')
     .eq('user_id', user.id)
 
+  // Per module: null = whole module required; a Set = only these specific
+  // sections are required (assigned individually).
+  const requiredSectionsByModule = new Map<string, Set<string> | null>()
+  const byModule = new Map<string, { rows: (Assignment & { module: Module })[] }>()
+  for (const a of assignments ?? []) {
+    if (!byModule.has(a.module_id)) byModule.set(a.module_id, { rows: [] })
+    byModule.get(a.module_id)!.rows.push(a)
+
+    if (!a.section_id) {
+      requiredSectionsByModule.set(a.module_id, null)
+    } else if (requiredSectionsByModule.get(a.module_id) !== null) {
+      const set = requiredSectionsByModule.get(a.module_id) ?? new Set<string>()
+      set.add(a.section_id)
+      requiredSectionsByModule.set(a.module_id, set)
+    }
+  }
+
+  const isSectionRequired = (moduleId: string, sectionId: string) => {
+    const required = requiredSectionsByModule.get(moduleId)
+    return !required || required.has(sectionId)
+  }
+
   const totalByModule: Record<string, number> = {}
   const completedByModule: Record<string, number> = {}
 
   for (const row of sectionCounts ?? []) {
+    if (!isSectionRequired(row.module_id, row.id)) continue
     totalByModule[row.module_id] = (totalByModule[row.module_id] ?? 0) + 1
   }
   for (const row of (completedSections ?? []) as any[]) {
     const moduleId = row.sections?.module_id
-    if (moduleId) completedByModule[moduleId] = (completedByModule[moduleId] ?? 0) + 1
+    if (moduleId && isSectionRequired(moduleId, row.section_id)) {
+      completedByModule[moduleId] = (completedByModule[moduleId] ?? 0) + 1
+    }
   }
 
-  const assignmentsWithProgress = (assignments ?? [])
-    .map(a => ({
-      ...a,
-      completed: completedByModule[a.module_id] ?? 0,
-      total: totalByModule[a.module_id] ?? 0,
-      percent: totalByModule[a.module_id]
-        ? Math.round(((completedByModule[a.module_id] ?? 0) / totalByModule[a.module_id]) * 100)
-        : 0,
-    }))
+  const assignmentsWithProgress = [...byModule.entries()]
+    .map(([moduleId, { rows }]) => {
+      const dueDates = rows.map(r => r.due_date).filter(Boolean) as string[]
+      const earliestDueDate = dueDates.length ? dueDates.sort()[0] : null
+      return {
+        ...rows[0],
+        module_id: moduleId,
+        due_date: earliestDueDate,
+        completed: completedByModule[moduleId] ?? 0,
+        total: totalByModule[moduleId] ?? 0,
+        percent: totalByModule[moduleId]
+          ? Math.round(((completedByModule[moduleId] ?? 0) / totalByModule[moduleId]) * 100)
+          : 0,
+      }
+    })
     // Required (auto-assigned-to-everyone) trainings always pin to the top
     .sort((a, b) => Number(b.module?.auto_assign_all) - Number(a.module?.auto_assign_all))
 

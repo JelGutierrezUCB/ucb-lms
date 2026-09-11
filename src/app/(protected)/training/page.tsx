@@ -51,10 +51,24 @@ export default async function TrainingPage({
 
   const { data: assignments } = await supabase
     .from('assignments')
-    .select('module_id')
+    .select('module_id, section_id')
     .eq('user_id', effectiveUserId)
 
-  assignedModuleIds = (assignments ?? []).map((a: any) => a.module_id)
+  assignedModuleIds = [...new Set((assignments ?? []).map((a: any) => a.module_id))]
+
+  // Per module: null = whole module required (no restriction on which
+  // sections count toward progress); a Set = only these specific sections
+  // are required (assigned individually, not the whole module).
+  const requiredSectionsByModule = new Map<string, Set<string> | null>()
+  for (const a of assignments ?? []) {
+    if (!a.section_id) {
+      requiredSectionsByModule.set(a.module_id, null)
+    } else if (requiredSectionsByModule.get(a.module_id) !== null) {
+      const set = requiredSectionsByModule.get(a.module_id) ?? new Set<string>()
+      set.add(a.section_id)
+      requiredSectionsByModule.set(a.module_id, set)
+    }
+  }
 
   // If viewing as proxy employee, show only their assigned modules
   // Admins/managers viewing their own training see all published modules
@@ -92,15 +106,25 @@ export default async function TrainingPage({
     .select('section_id, sections!inner(module_id)')
     .eq('user_id', effectiveUserId)
 
+  // A module's required set is null/absent (whole module or admin preview,
+  // no restriction) or a specific Set of section ids (partial assignment).
+  const isSectionRequired = (moduleId: string, sectionId: string) => {
+    const required = requiredSectionsByModule.get(moduleId)
+    return !required || required.has(sectionId)
+  }
+
   const totalByModule: Record<string, number> = {}
   const completedByModule: Record<string, number> = {}
 
   for (const row of sectionCounts ?? []) {
+    if (!isSectionRequired(row.module_id, row.id)) continue
     totalByModule[row.module_id] = (totalByModule[row.module_id] ?? 0) + 1
   }
   for (const row of (completedSections ?? []) as any[]) {
     const moduleId = row.sections?.module_id
-    if (moduleId) completedByModule[moduleId] = (completedByModule[moduleId] ?? 0) + 1
+    if (moduleId && isSectionRequired(moduleId, row.section_id)) {
+      completedByModule[moduleId] = (completedByModule[moduleId] ?? 0) + 1
+    }
   }
 
   const asParam = isProxy ? `?as=${effectiveUserId}` : ''

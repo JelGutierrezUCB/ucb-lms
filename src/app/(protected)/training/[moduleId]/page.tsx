@@ -72,7 +72,25 @@ export default async function TrainingModulePage({
 
   const completedIds = new Set((completedSections ?? []).map((r: any) => r.section_id))
 
-  const sectionsWithBlocks = (sections ?? []).map(s => ({
+  // If this employee is only assigned SPECIFIC trainings within this module
+  // (no whole-module assignment), only show those — not every section.
+  // Admins/managers previewing a module they haven't assigned to themselves
+  // see everything, same as before.
+  const { data: assignmentRows } = await supabase
+    .from('assignments')
+    .select('section_id')
+    .eq('user_id', effectiveUserId)
+    .eq('module_id', moduleId)
+
+  const hasWholeModuleAssignment = (assignmentRows ?? []).some(a => !a.section_id)
+  const assignedSectionIds = new Set((assignmentRows ?? []).filter(a => a.section_id).map(a => a.section_id as string))
+  const isPartiallyAssigned = !hasWholeModuleAssignment && assignedSectionIds.size > 0
+
+  const visibleSections = isPartiallyAssigned
+    ? (sections ?? []).filter(s => assignedSectionIds.has(s.id))
+    : (sections ?? [])
+
+  const sectionsWithBlocks = visibleSections.map(s => ({
     ...s,
     content_blocks: (contentBlocks ?? []).filter(b => b.section_id === s.id),
     is_completed: completedIds.has(s.id),

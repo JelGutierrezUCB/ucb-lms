@@ -59,16 +59,23 @@ create table content_blocks (
   created_at timestamptz default now()
 );
 
--- Training assignments
+-- Training assignments. section_id null = whole module assigned; section_id
+-- set = just that one training within the module is assigned. Two partial
+-- unique indexes (below, near the other assignment indexes) enforce
+-- "one module-level row" vs "one row per assigned section" respectively,
+-- since a single plain unique constraint can't express both.
 create table assignments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references profiles(id) on delete cascade not null,
   module_id uuid references modules(id) on delete cascade not null,
+  section_id uuid references sections(id) on delete cascade,
   assigned_by uuid references profiles(id) not null,
   assigned_at timestamptz default now(),
-  due_date date,
-  unique(user_id, module_id)
+  due_date date
 );
+
+create unique index assignments_module_level_uniq on assignments (user_id, module_id) where section_id is null;
+create unique index assignments_section_level_uniq on assignments (user_id, module_id, section_id) where section_id is not null;
 
 -- Auto-assign modules flagged auto_assign_all to every newly created profile
 create or replace function auto_assign_required_modules()
@@ -204,6 +211,10 @@ create policy "assignments_insert" on assignments for insert with check (
   exists (select 1 from profiles where id = auth.uid() and role in ('admin', 'manager'))
 );
 create policy "assignments_delete" on assignments for delete using (
+  assigned_by = auth.uid() or
+  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+);
+create policy "assignments_update" on assignments for update using (
   assigned_by = auth.uid() or
   exists (select 1 from profiles where id = auth.uid() and role = 'admin')
 );

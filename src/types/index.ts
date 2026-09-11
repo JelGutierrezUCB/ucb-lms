@@ -128,10 +128,12 @@ export interface Assignment {
   id: string
   user_id: string
   module_id: string
+  section_id: string | null // null = whole module assigned; set = just this training within it
   assigned_by: string
   assigned_at: string
   due_date: string | null
   module?: Module
+  section?: Section
   user?: Profile
 }
 
