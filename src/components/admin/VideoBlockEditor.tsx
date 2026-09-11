@@ -19,6 +19,27 @@ interface Props {
 
 const MAX_VIDEO_SIZE = 100 * 1024 * 1024 // 100MB, matches storage bucket limit
 
+// Reads actual duration from the video file's own metadata, client-side —
+// used to auto-recommend the module's estimated duration later.
+function getVideoDuration(file: File): Promise<number | undefined> {
+  return new Promise(resolve => {
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(video.src)
+      resolve(Number.isFinite(video.duration) ? video.duration : undefined)
+    }
+    video.onerror = () => resolve(undefined)
+    video.src = URL.createObjectURL(file)
+  })
+}
+
+function formatDuration(seconds: number) {
+  const m = Math.floor(seconds / 60)
+  const s = Math.round(seconds % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
 export function VideoBlockEditor({ content, onChange }: Props) {
   const source: VideoSource = content.source ?? 'youtube'
   const [previewId, setPreviewId] = useState(content.youtube_id)
@@ -40,12 +61,13 @@ export function VideoBlockEditor({ content, onChange }: Props) {
     if (!file) return
     setUploading(true)
     try {
+      const duration_seconds = await getVideoDuration(file)
       const ext = file.name.split('.').pop()
       const path = `${crypto.randomUUID()}.${ext}`
       const { error } = await supabase.storage.from('training-videos').upload(path, file)
       if (error) throw error
       const { data } = supabase.storage.from('training-videos').getPublicUrl(path)
-      onChange({ ...content, source: 'upload', upload_url: data.publicUrl, upload_path: path })
+      onChange({ ...content, source: 'upload', upload_url: data.publicUrl, upload_path: path, duration_seconds })
     } catch (err: any) {
       toast.error(err.message ?? 'Upload failed')
     } finally {
@@ -71,7 +93,7 @@ export function VideoBlockEditor({ content, onChange }: Props) {
     if (content.upload_path) {
       await supabase.storage.from('training-videos').remove([content.upload_path])
     }
-    onChange({ ...content, upload_url: undefined, upload_path: undefined })
+    onChange({ ...content, upload_url: undefined, upload_path: undefined, duration_seconds: undefined })
   }
 
   return (
@@ -131,9 +153,14 @@ export function VideoBlockEditor({ content, onChange }: Props) {
               <div className="rounded-xl overflow-hidden border border-slate-200 aspect-video bg-black">
                 <video src={content.upload_url} className="w-full h-full" controls />
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={removeUpload}>
-                <X className="h-3.5 w-3.5 mr-1" /> Remove video
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button type="button" variant="outline" size="sm" onClick={removeUpload}>
+                  <X className="h-3.5 w-3.5 mr-1" /> Remove video
+                </Button>
+                {content.duration_seconds != null && (
+                  <span className="text-xs text-slate-400">Duration: {formatDuration(content.duration_seconds)}</span>
+                )}
+              </div>
             </div>
           ) : (
             <div

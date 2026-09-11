@@ -4,9 +4,9 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Clock, BookOpen } from 'lucide-react'
+import { Clock, BookOpen, Star } from 'lucide-react'
 import Link from 'next/link'
-import { getCategoryColor, getCategoryLabel } from '@/lib/utils'
+import { cn, getCategoryColor, getCategoryLabel } from '@/lib/utils'
 import type { Module } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -78,6 +78,9 @@ export default async function TrainingPage({
     }
   }
 
+  // Required (auto-assigned-to-everyone) modules always pin to the top
+  modules = [...modules].sort((a, b) => Number(b.auto_assign_all) - Number(a.auto_assign_all))
+
   // Get progress for effective user
   const { data: sectionCounts } = await supabase
     .from('sections')
@@ -125,17 +128,28 @@ export default async function TrainingPage({
               const completed = completedByModule[mod.id] ?? 0
               const percent = total > 0 ? Math.round((completed / total) * 100) : 0
               const isAssigned = assignedModuleIds.includes(mod.id)
+              const isRequired = mod.auto_assign_all
 
               return (
                 <Link key={mod.id} href={`/training/${mod.id}${asParam}`}>
-                  <Card className="h-full flex flex-col hover:shadow-md transition-shadow cursor-pointer group">
+                  <Card
+                    className={cn(
+                      'h-full flex flex-col hover:shadow-md transition-shadow cursor-pointer group',
+                      isRequired && 'ring-2 ring-amber-400 border-amber-300'
+                    )}
+                  >
                     <div
-                      className="h-32 flex items-center justify-center rounded-t-xl"
+                      className="h-32 flex items-center justify-center rounded-t-xl relative"
                       style={{ backgroundColor: getCategoryColor(mod.category) }}
                     >
                       <span className="text-white text-5xl font-bold opacity-30">
                         {mod.title.charAt(0)}
                       </span>
+                      {isRequired && (
+                        <div className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-amber-400 text-amber-950 text-xs font-semibold px-2.5 py-1">
+                          <Star className="h-3 w-3 fill-current" /> Required
+                        </div>
+                      )}
                     </div>
                     <CardContent className="flex flex-col flex-1 pt-4 pb-5">
                       <div className="flex items-start gap-2 mb-2">

@@ -4,9 +4,9 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { BookOpen, CheckCircle, Clock, TrendingUp } from 'lucide-react'
+import { BookOpen, CheckCircle, Clock, TrendingUp, Star } from 'lucide-react'
 import Link from 'next/link'
-import { getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
+import { cn, getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
 import type { Profile, Module, Assignment } from '@/types'
 
 export default async function DashboardPage() {
@@ -56,14 +56,17 @@ export default async function DashboardPage() {
     if (moduleId) completedByModule[moduleId] = (completedByModule[moduleId] ?? 0) + 1
   }
 
-  const assignmentsWithProgress = (assignments ?? []).map(a => ({
-    ...a,
-    completed: completedByModule[a.module_id] ?? 0,
-    total: totalByModule[a.module_id] ?? 0,
-    percent: totalByModule[a.module_id]
-      ? Math.round(((completedByModule[a.module_id] ?? 0) / totalByModule[a.module_id]) * 100)
-      : 0,
-  }))
+  const assignmentsWithProgress = (assignments ?? [])
+    .map(a => ({
+      ...a,
+      completed: completedByModule[a.module_id] ?? 0,
+      total: totalByModule[a.module_id] ?? 0,
+      percent: totalByModule[a.module_id]
+        ? Math.round(((completedByModule[a.module_id] ?? 0) / totalByModule[a.module_id]) * 100)
+        : 0,
+    }))
+    // Required (auto-assigned-to-everyone) trainings always pin to the top
+    .sort((a, b) => Number(b.module?.auto_assign_all) - Number(a.module?.auto_assign_all))
 
   const completedCount = assignmentsWithProgress.filter(a => a.percent === 100).length
   const inProgressCount = assignmentsWithProgress.filter(a => a.percent > 0 && a.percent < 100).length
@@ -114,7 +117,12 @@ export default async function DashboardPage() {
                   <Link
                     key={a.id}
                     href={`/training/${a.module_id}`}
-                    className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 hover:border-blue-200 hover:bg-blue-50/30 transition-all group"
+                    className={cn(
+                      'flex items-center gap-4 p-4 rounded-xl border transition-all group',
+                      a.module?.auto_assign_all
+                        ? 'border-amber-300 ring-1 ring-amber-300 bg-amber-50/40 hover:bg-amber-50'
+                        : 'border-slate-200 hover:border-blue-200 hover:bg-blue-50/30'
+                    )}
                   >
                     <div
                       className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white font-bold text-lg"
@@ -127,6 +135,11 @@ export default async function DashboardPage() {
                         <p className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">
                           {a.module?.title}
                         </p>
+                        {a.module?.auto_assign_all && (
+                          <Badge className="bg-amber-400 text-amber-950 flex items-center gap-1">
+                            <Star className="h-3 w-3 fill-current" /> Required
+                          </Badge>
+                        )}
                         <Badge variant={a.percent === 100 ? 'success' : a.percent > 0 ? 'warning' : 'outline'}>
                           {a.percent === 100 ? 'Complete' : a.percent > 0 ? 'In Progress' : 'Not Started'}
                         </Badge>

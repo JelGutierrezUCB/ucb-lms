@@ -25,6 +25,7 @@ create table modules (
   is_published boolean default false,
   created_by uuid references profiles(id),
   estimated_minutes int default 30,
+  auto_assign_all boolean not null default false,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -52,7 +53,7 @@ create table sections (
 create table content_blocks (
   id uuid primary key default gen_random_uuid(),
   section_id uuid references sections(id) on delete cascade not null,
-  type text not null check (type in ('text', 'video', 'quiz')),
+  type text not null check (type in ('text', 'video', 'quiz', 'slides', 'document')),
   order_index int not null default 0,
   content jsonb not null default '{}',
   created_at timestamptz default now()
@@ -68,6 +69,29 @@ create table assignments (
   due_date date,
   unique(user_id, module_id)
 );
+
+-- Auto-assign modules flagged auto_assign_all to every newly created profile
+create or replace function auto_assign_required_modules()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into assignments (user_id, module_id, assigned_by)
+  select new.id, m.id, new.id
+  from modules m
+  where m.auto_assign_all = true
+  on conflict (user_id, module_id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_auto_assign_required_modules on profiles;
+create trigger trg_auto_assign_required_modules
+  after insert on profiles
+  for each row
+  execute function auto_assign_required_modules();
 
 -- Section completion tracking
 create table section_progress (
@@ -240,5 +264,34 @@ create policy "training_videos_insert" on storage.objects for insert with check 
 );
 create policy "training_videos_delete" on storage.objects for delete using (
   bucket_id = 'training-videos' and
+  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+);
+
+-- Private bucket to hold documents used by the training system: source
+-- files uploaded to the AI Training Generator (downloaded server-side and
+-- deleted once generation completes, unless "retain document" is chosen),
+-- and files manually attached via a "document" content block in the module
+-- editor (kept indefinitely). No mime-type restriction — admins can attach
+-- any file type (PDF, Word, or anything else) to a training.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'training-source-docs',
+  'training-source-docs',
+  false,
+  209715200, -- 200MB
+  null
+)
+on conflict (id) do update set file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+create policy "training_source_docs_select" on storage.objects for select using (
+  bucket_id = 'training-source-docs' and
+  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+);
+create policy "training_source_docs_insert" on storage.objects for insert with check (
+  bucket_id = 'training-source-docs' and
+  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+);
+create policy "training_source_docs_delete" on storage.objects for delete using (
+  bucket_id = 'training-source-docs' and
   exists (select 1 from profiles where id = auth.uid() and role = 'admin')
 );

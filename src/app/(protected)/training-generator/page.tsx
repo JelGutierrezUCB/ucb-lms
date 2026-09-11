@@ -11,11 +11,16 @@ export default async function TrainingGeneratorPage() {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
+  const { data: modules } = await supabase
+    .from('modules')
+    .select('id, title, category')
+    .order('title')
+
   return (
     <div className="flex flex-col flex-1 overflow-auto">
       <Header title="AI Training Generator" />
       <main className="flex-1 p-6">
-        <TrainingGenerator userId={user.id} />
+        <TrainingGenerator userId={user.id} existingModules={modules ?? []} />
       </main>
     </div>
   )

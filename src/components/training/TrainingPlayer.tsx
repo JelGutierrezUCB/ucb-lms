@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, Circle, ChevronRight, ChevronLeft, Trophy, BookOpen } from 'lucide-react'
+import { CheckCircle, Circle, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Trophy, BookOpen, Clock } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge'
 import { TextViewer } from './TextViewer'
 import { VideoViewer } from './VideoViewer'
 import { QuizViewer } from './QuizViewer'
+import { SlideViewer } from './SlideViewer'
+import { DocumentViewer } from './DocumentViewer'
 import { cn, getCategoryColor, getCategoryLabel } from '@/lib/utils'
 import type { Module, ContentBlock, QuizContent } from '@/types'
 import { useProxy } from '@/contexts/ProxyContext'
@@ -36,6 +38,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
   )
   const [quizPassed, setQuizPassed] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
+  const [summaryOpen, setSummaryOpen] = useState(true)
   const { effectiveUserId } = useProxy()
   const supabase = createClient()
   const router = useRouter()
@@ -133,6 +136,33 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
           </div>
         </div>
 
+        {module.description && (
+          <div className="border-b border-slate-200 shrink-0">
+            <button
+              onClick={() => setSummaryOpen(o => !o)}
+              className="w-full flex items-center justify-between px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <span>Course Summary</span>
+              {summaryOpen ? (
+                <ChevronUp className="h-4 w-4 text-slate-400" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-slate-400" />
+              )}
+            </button>
+            {summaryOpen && (
+              <div className="px-5 pb-4 space-y-2">
+                <p className="text-sm text-slate-500 leading-relaxed whitespace-pre-line">{module.description}</p>
+                {module.estimated_minutes > 0 && (
+                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>{module.estimated_minutes} min estimated</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
           {sections.map((section, i) => {
             const isComplete = completedSections.has(section.id)
@@ -194,6 +224,8 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
               <div key={block.id}>
                 {block.type === 'text' && <TextViewer content={block.content as any} />}
                 {block.type === 'video' && <VideoViewer content={block.content as any} />}
+                {block.type === 'slides' && <SlideViewer content={block.content as any} />}
+                {block.type === 'document' && <DocumentViewer blockId={block.id} content={block.content as any} />}
                 {block.type === 'quiz' && (
                   <QuizViewer
                     block={block}

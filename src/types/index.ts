@@ -32,6 +32,7 @@ export interface Module {
   is_published: boolean
   created_by: string | null
   estimated_minutes: number
+  auto_assign_all: boolean
   created_at: string
   updated_at: string
 }
@@ -54,10 +55,33 @@ export interface Section {
   content_blocks?: ContentBlock[]
 }
 
-export type ContentBlockType = 'text' | 'video' | 'quiz'
+export type ContentBlockType = 'text' | 'video' | 'quiz' | 'slides' | 'document'
 
 export interface TextContent {
   html: string
+}
+
+// A single slide in a "slides" block: title + bullets shown on screen,
+// with a narration script read aloud client-side via the Web Speech API
+// (no audio file is generated or stored — it's synthesized live in the browser).
+export interface Slide {
+  title: string
+  bullets: string[]
+  narration: string
+}
+
+export interface SlidesContent {
+  slides: Slide[]
+}
+
+// A retained copy of the original source document (e.g. the file the AI
+// Training Generator was given), offered as an alternate way to go through
+// the training. storage_path points into the private "training-source-docs"
+// bucket; access is via a short-lived signed URL, never a direct public link.
+export interface DocumentContent {
+  storage_path: string
+  file_name: string
+  mime_type?: string
 }
 
 export type VideoSource = 'youtube' | 'upload'
@@ -69,6 +93,7 @@ export interface VideoContent {
   upload_url?: string
   upload_path?: string
   caption?: string
+  duration_seconds?: number // captured from the file's own metadata on upload; not available for YouTube links
 }
 
 export type QuestionType = 'multiple_choice' | 'long_answer'
@@ -88,7 +113,7 @@ export interface QuizContent {
   passing_score: number
 }
 
-export type BlockContent = TextContent | VideoContent | QuizContent
+export type BlockContent = TextContent | VideoContent | QuizContent | SlidesContent | DocumentContent
 
 export interface ContentBlock {
   id: string

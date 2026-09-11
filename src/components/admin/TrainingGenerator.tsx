@@ -5,12 +5,14 @@ import { useDropzone } from 'react-dropzone'
 import { useRouter } from 'next/navigation'
 import {
   Upload, FileText, FileSpreadsheet, File, Sparkles,
-  CheckCircle, ArrowRight, Loader2
+  CheckCircle, ArrowRight, Loader2, FolderPlus, FolderOpen, Presentation, Paperclip
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
@@ -25,14 +27,21 @@ interface GeneratedModule {
   sections: {
     title: string
     content_blocks: {
-      type: 'text' | 'quiz'
+      type: 'text' | 'quiz' | 'slides'
       content: any
     }[]
   }[]
 }
 
+interface RetainedDocument {
+  storagePath: string
+  fileName: string
+  mimeType?: string
+}
+
 interface Props {
   userId: string
+  existingModules: { id: string; title: string; category: string }[]
 }
 
 const fileIcons: Record<string, React.ReactNode> = {
@@ -44,14 +53,21 @@ const fileIcons: Record<string, React.ReactNode> = {
   txt: <FileText className="h-8 w-8 text-slate-500" />,
 }
 
-export function TrainingGenerator({ userId }: Props) {
+export function TrainingGenerator({ userId, existingModules }: Props) {
   const [file, setFile] = useState<File | null>(null)
   const [additionalContext, setAdditionalContext] = useState('')
   const [category, setCategory] = useState('general')
-  const [step, setStep] = useState<'upload' | 'generating' | 'preview' | 'saving'>('upload')
+  const [targetMode, setTargetMode] = useState<'new' | 'existing'>('new')
+  const [targetModuleId, setTargetModuleId] = useState('')
+  const [includeText, setIncludeText] = useState(true)
+  const [includeSlides, setIncludeSlides] = useState(false)
+  const [retainDocument, setRetainDocument] = useState(false)
+  const [step, setStep] = useState<'upload' | 'uploading' | 'generating' | 'preview' | 'saving'>('upload')
   const [generated, setGenerated] = useState<GeneratedModule | null>(null)
+  const [retainedDocument, setRetainedDocument] = useState<RetainedDocument | null>(null)
   const [saving, setSaving] = useState(false)
   const router = useRouter()
+  const supabase = createClient()
 
   const onDrop = useCallback((accepted: File[]) => {
     if (accepted[0]) setFile(accepted[0])
@@ -68,27 +84,56 @@ export function TrainingGenerator({ userId }: Props) {
       'text/plain': ['.txt'],
     },
     maxFiles: 1,
-    maxSize: 20 * 1024 * 1024, // 20MB
+    // No maxSize — files upload directly to Supabase Storage (200MB bucket
+    // limit) instead of through the API route body, so there's no practical
+    // client-side cap to enforce here.
   })
 
   const getFileExt = (name: string) => name.split('.').pop()?.toLowerCase() ?? 'file'
 
+  const targetModule = existingModules.find(m => m.id === targetModuleId)
+
   const handleGenerate = async () => {
     if (!file) { toast.error('Please upload a file'); return }
-    setStep('generating')
+    if (targetMode === 'existing' && !targetModuleId) { toast.error('Please select a module to add this training to'); return }
+    if (!includeText && !includeSlides) { toast.error('Select at least one content type: Text & Quiz or Narrated Slides'); return }
 
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('category', category)
-    formData.append('context', additionalContext)
-
+    setStep('uploading')
+    let storagePath = ''
     try {
-      const res = await fetch('/api/generate-training', { method: 'POST', body: formData })
+      const ext = getFileExt(file.name)
+      storagePath = `${userId}/${crypto.randomUUID()}.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('training-source-docs')
+        .upload(storagePath, file)
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`)
+    } catch (err: any) {
+      toast.error(err.message)
+      setStep('upload')
+      return
+    }
+
+    setStep('generating')
+    try {
+      const res = await fetch('/api/generate-training', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storagePath,
+          fileName: file.name,
+          category: targetMode === 'existing' ? (targetModule?.category ?? category) : category,
+          context: additionalContext,
+          includeText,
+          includeSlides,
+          retainDocument,
+        }),
+      })
       const data = await res.json()
 
       if (!res.ok) throw new Error(data.error ?? 'Generation failed')
 
       setGenerated(data.module)
+      setRetainedDocument(data.retainedDocument ?? null)
       setStep('preview')
     } catch (err: any) {
       toast.error(err.message)
@@ -105,12 +150,17 @@ export function TrainingGenerator({ userId }: Props) {
       const res = await fetch('/api/save-generated-module', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ module: generated, userId }),
+        body: JSON.stringify({
+          module: generated,
+          userId,
+          targetModuleId: targetMode === 'existing' ? targetModuleId : null,
+          retainedDocument,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
 
-      toast.success('Training module created!')
+      toast.success(targetMode === 'existing' ? 'Training added to module!' : 'Training module created!')
       router.push(`/admin/modules/${data.moduleId}/edit`)
     } catch (err: any) {
       toast.error(err.message)
@@ -129,7 +179,7 @@ export function TrainingGenerator({ userId }: Props) {
           <h2 className="text-xl font-bold">AI Training Generator</h2>
         </div>
         <p className="text-blue-100">
-          Upload a PDF, Word document, or PowerPoint and Claude AI will automatically create a structured training module with sections, content, and quiz questions.
+          Upload a PDF, Word document, or PowerPoint and Claude AI will turn it into structured training content with sections, content, and quiz questions — as a new module, or added into one you already have.
         </p>
       </div>
 
@@ -139,22 +189,25 @@ export function TrainingGenerator({ userId }: Props) {
           { key: 'upload', label: '1. Upload' },
           { key: 'generating', label: '2. Generating' },
           { key: 'preview', label: '3. Preview & Save' },
-        ].map((s, i) => (
-          <div key={s.key} className="flex items-center gap-2">
-            <div className={cn(
-              'flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold',
-              step === s.key ? 'bg-blue-700 text-white' :
-              (step === 'preview' && s.key === 'upload') || (step === 'saving' && s.key !== 'saving') ? 'bg-green-500 text-white' :
-              'bg-slate-200 text-slate-500'
-            )}>
-              {(step === 'preview' && s.key === 'upload') ? <CheckCircle className="h-4 w-4" /> : i + 1}
+        ].map((s, i) => {
+          const displayStep = step === 'uploading' ? 'generating' : step
+          return (
+            <div key={s.key} className="flex items-center gap-2">
+              <div className={cn(
+                'flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold',
+                displayStep === s.key ? 'bg-blue-700 text-white' :
+                (displayStep === 'preview' && s.key === 'upload') || (displayStep === 'saving' && s.key !== 'saving') ? 'bg-green-500 text-white' :
+                'bg-slate-200 text-slate-500'
+              )}>
+                {(displayStep === 'preview' && s.key === 'upload') ? <CheckCircle className="h-4 w-4" /> : i + 1}
+              </div>
+              <span className={cn('text-sm', displayStep === s.key ? 'font-semibold text-slate-900' : 'text-slate-400')}>
+                {s.label}
+              </span>
+              {i < 2 && <ArrowRight className="h-4 w-4 text-slate-300 mx-1" />}
             </div>
-            <span className={cn('text-sm', step === s.key ? 'font-semibold text-slate-900' : 'text-slate-400')}>
-              {s.label}
-            </span>
-            {i < 2 && <ArrowRight className="h-4 w-4 text-slate-300 mx-1" />}
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Step 1: Upload */}
@@ -189,23 +242,97 @@ export function TrainingGenerator({ userId }: Props) {
                     <p className="font-semibold text-slate-700">
                       {isDragActive ? 'Drop your file here' : 'Drop a file or click to browse'}
                     </p>
-                    <p className="text-sm text-slate-400 mt-1">PDF, Word (.docx), PowerPoint (.pptx), or TXT — up to 20MB</p>
+                    <p className="text-sm text-slate-400 mt-1">PDF, Word (.docx), PowerPoint (.pptx), or TXT — no size limit</p>
                   </div>
                 </div>
               )}
             </div>
 
+            {/* Target: new module vs. add to an existing one */}
+            <div className="space-y-1.5">
+              <Label>Where should this training go?</Label>
+              <div className="flex gap-2 rounded-lg bg-slate-100 p-1 w-fit">
+                <button
+                  type="button"
+                  onClick={() => setTargetMode('new')}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                    targetMode === 'new' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'
+                  )}
+                >
+                  <FolderPlus className="h-4 w-4" /> Create New Module
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTargetMode('existing')}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                    targetMode === 'existing' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'
+                  )}
+                >
+                  <FolderOpen className="h-4 w-4" /> Add to Existing Module
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Category</Label>
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {MODULE_CATEGORIES.map(c => (
-                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {targetMode === 'new' ? (
+                <div className="space-y-1.5">
+                  <Label>Category</Label>
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {MODULE_CATEGORIES.map(c => (
+                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Existing Module</Label>
+                  {existingModules.length === 0 ? (
+                    <p className="text-sm text-slate-400">No modules exist yet — create one first, or switch to "Create New Module".</p>
+                  ) : (
+                    <Select value={targetModuleId} onValueChange={setTargetModuleId}>
+                      <SelectTrigger><SelectValue placeholder="Select a module..." /></SelectTrigger>
+                      <SelectContent>
+                        {existingModules.map(m => (
+                          <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <p className="text-xs text-slate-400">The generated sections will be appended as new trainings within this module.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Content preferences */}
+            <div className="space-y-1.5">
+              <Label>Content to generate</Label>
+              <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <Checkbox checked={includeText} onCheckedChange={v => setIncludeText(!!v)} className="mt-0.5" />
+                  <span className="text-sm">
+                    <span className="font-medium text-slate-800 flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Text sections & quiz</span>
+                    <span className="text-slate-400 block">Standard read-through sections with a quiz, like today.</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <Checkbox checked={includeSlides} onCheckedChange={v => setIncludeSlides(!!v)} className="mt-0.5" />
+                  <span className="text-sm">
+                    <span className="font-medium text-slate-800 flex items-center gap-1.5"><Presentation className="h-3.5 w-3.5" /> Narrated slides (voiceover)</span>
+                    <span className="text-slate-400 block">Adds a slide deck per section with a narration script read aloud in the browser — plays like a narrated video, no video file involved.</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <Checkbox checked={retainDocument} onCheckedChange={v => setRetainDocument(!!v)} className="mt-0.5" />
+                  <span className="text-sm">
+                    <span className="font-medium text-slate-800 flex items-center gap-1.5"><Paperclip className="h-3.5 w-3.5" /> Attach original document</span>
+                    <span className="text-slate-400 block">Keeps the uploaded file itself as a viewable/downloadable training resource, in addition to the generated content.</span>
+                  </span>
+                </label>
               </div>
             </div>
 
@@ -219,22 +346,31 @@ export function TrainingGenerator({ userId }: Props) {
               />
             </div>
 
-            <Button className="w-full" size="lg" disabled={!file} onClick={handleGenerate}>
+            <Button
+              className="w-full"
+              size="lg"
+              disabled={!file || (targetMode === 'existing' && !targetModuleId) || (!includeText && !includeSlides)}
+              onClick={handleGenerate}
+            >
               <Sparkles className="h-4 w-4 mr-2" />
-              Generate Training Module
+              Generate Training
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {/* Step 2: Generating */}
-      {step === 'generating' && (
+      {/* Step 2: Uploading / Generating */}
+      {(step === 'uploading' || step === 'generating') && (
         <Card>
           <CardContent className="py-16 text-center">
             <Loader2 className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
-            <p className="text-lg font-semibold text-slate-900">Generating your training module...</p>
+            <p className="text-lg font-semibold text-slate-900">
+              {step === 'uploading' ? 'Uploading your document...' : 'Generating your training content...'}
+            </p>
             <p className="text-slate-500 mt-2">
-              Claude AI is reading your document and creating a structured training with sections, content, and quiz questions.
+              {step === 'uploading'
+                ? 'Sending your file to secure storage — larger files may take a bit longer.'
+                : 'Claude AI is reading your document and creating a structured training with sections, content, and quiz questions.'}
             </p>
             <p className="text-sm text-slate-400 mt-4">This usually takes 15–30 seconds</p>
           </CardContent>
@@ -248,10 +384,22 @@ export function TrainingGenerator({ userId }: Props) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-500" />
-                Generated Module Preview
+                Generated Training Preview
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {targetMode === 'existing' && targetModule && (
+                <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
+                  <FolderOpen className="h-4 w-4 shrink-0" />
+                  Will be added as new training(s) inside <strong>{targetModule.title}</strong>
+                </div>
+              )}
+              {retainedDocument && (
+                <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                  <Paperclip className="h-4 w-4 shrink-0" />
+                  Original document (<strong>{retainedDocument.fileName}</strong>) will be attached as a "Reference Document" training
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl">
                 <div>
                   <p className="text-xs text-slate-500 font-medium">TITLE</p>
@@ -279,6 +427,7 @@ export function TrainingGenerator({ userId }: Props) {
                       <p className="text-xs text-slate-400 mt-0.5">
                         {section.content_blocks.length} block{section.content_blocks.length !== 1 ? 's' : ''}
                         {section.content_blocks.some(b => b.type === 'quiz') && ' · includes quiz'}
+                        {section.content_blocks.some(b => b.type === 'slides') && ' · includes narrated slides'}
                       </p>
                     </div>
                   </div>
@@ -288,7 +437,7 @@ export function TrainingGenerator({ userId }: Props) {
           </Card>
 
           <div className="flex gap-3">
-            <Button variant="outline" onClick={() => { setStep('upload'); setGenerated(null) }}>
+            <Button variant="outline" onClick={() => { setStep('upload'); setGenerated(null); setRetainedDocument(null) }}>
               Start Over
             </Button>
             <Button
@@ -297,7 +446,7 @@ export function TrainingGenerator({ userId }: Props) {
               loading={saving}
               onClick={handleSave}
             >
-              Save Module & Open Editor
+              {targetMode === 'existing' ? 'Add to Module & Open Editor' : 'Save Module & Open Editor'}
             </Button>
           </div>
           <p className="text-sm text-slate-400 text-center">

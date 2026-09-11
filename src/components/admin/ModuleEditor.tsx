@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Plus, Trash2, GripVertical, ChevronDown, ChevronUp,
   Type, Video, HelpCircle, Save, ArrowLeft, Eye, EyeOff, Folder, FolderOpen, Check, X,
+  Presentation, FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -19,8 +20,10 @@ import { Separator } from '@/components/ui/separator'
 import { TextBlockEditor } from './TextBlockEditor'
 import { VideoBlockEditor } from './VideoBlockEditor'
 import { QuizBlockEditor } from './QuizBlockEditor'
+import { SlideBlockEditor } from './SlideBlockEditor'
+import { DocumentBlockEditor } from './DocumentBlockEditor'
 import { extractYoutubeId } from '@/lib/utils'
-import type { Module, Section, ContentBlock, ContentBlockType, QuizContent, Group } from '@/types'
+import type { Module, Section, ContentBlock, ContentBlockType, QuizContent, TextContent, VideoContent, SlidesContent, Group } from '@/types'
 import { MODULE_CATEGORIES } from '@/types'
 
 interface SectionWithBlocks extends Section {
@@ -40,6 +43,42 @@ function generateId() {
 
 const UNGROUPED = '__ungrouped__'
 
+const stripHtml = (html: string) => html.replace(/<[^>]*>/g, ' ')
+const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).length
+
+// Recommends a total duration from the module's actual content: real video
+// file length where known, reading time from text, speaking time from
+// narration scripts, and a per-question allowance for quizzes. Falls back to
+// a flat estimate for content it can't measure (YouTube links, documents).
+function estimateMinutesFromContent(sections: SectionWithBlocks[]): number {
+  const READING_WPM = 200
+  const NARRATION_WPM = 150
+  const FALLBACK_VIDEO_MINUTES = 5
+  const MINUTES_PER_QUIZ_QUESTION = 0.75
+  const FALLBACK_DOCUMENT_MINUTES = 5
+
+  let total = 0
+  for (const section of sections) {
+    for (const block of section.content_blocks) {
+      if (block.type === 'text') {
+        total += wordCount(stripHtml((block.content as TextContent).html ?? '')) / READING_WPM
+      } else if (block.type === 'video') {
+        const vc = block.content as VideoContent
+        total += vc.duration_seconds != null ? vc.duration_seconds / 60 : FALLBACK_VIDEO_MINUTES
+      } else if (block.type === 'quiz') {
+        total += ((block.content as QuizContent).questions?.length ?? 0) * MINUTES_PER_QUIZ_QUESTION
+      } else if (block.type === 'slides') {
+        for (const slide of (block.content as SlidesContent).slides ?? []) {
+          total += wordCount(slide.narration ?? '') / NARRATION_WPM + 0.25 // + time to read bullets
+        }
+      } else if (block.type === 'document') {
+        total += FALLBACK_DOCUMENT_MINUTES
+      }
+    }
+  }
+  return Math.max(1, Math.round(total))
+}
+
 export function ModuleEditor({ module: existingModule, initialGroups = [], initialSections = [], createdBy }: Props) {
   const router = useRouter()
   const supabase = createClient()
@@ -51,6 +90,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
   const [isPublished, setIsPublished] = useState(existingModule?.is_published ?? false)
   const [groups, setGroups] = useState<Group[]>(initialGroups)
   const [sections, setSections] = useState<SectionWithBlocks[]>(initialSections)
+  const recommendedMinutes = useMemo(() => estimateMinutesFromContent(sections), [sections])
   const [saving, setSaving] = useState(false)
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(initialSections.map(s => s.id))
@@ -195,6 +235,8 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
       text: { html: '<p>Enter your content here...</p>' },
       video: { source: 'youtube', youtube_url: '', youtube_id: '', caption: '' },
       quiz: { questions: [], passing_score: 70 } as QuizContent,
+      slides: { slides: [] },
+      document: { storage_path: '', file_name: '' },
     }
     const block: ContentBlock = {
       id: generateId(),
@@ -325,20 +367,26 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
     text: <Type className="h-4 w-4" />,
     video: <Video className="h-4 w-4" />,
     quiz: <HelpCircle className="h-4 w-4" />,
+    slides: <Presentation className="h-4 w-4" />,
+    document: <FileText className="h-4 w-4" />,
   }
 
-  const blockTypeLabels = { text: 'Text', video: 'Video', quiz: 'Quiz' }
+  const blockTypeLabels = { text: 'Text', video: 'Video', quiz: 'Quiz', slides: 'Slides', document: 'File' }
 
   const presenceBadges = (section: SectionWithBlocks) => {
     const has = {
       text: section.content_blocks.some(b => b.type === 'text'),
       video: section.content_blocks.some(b => b.type === 'video'),
       quiz: section.content_blocks.some(b => b.type === 'quiz'),
+      slides: section.content_blocks.some(b => b.type === 'slides'),
+      document: section.content_blocks.some(b => b.type === 'document'),
     }
     const items: { key: keyof typeof has; label: string }[] = [
       { key: 'text', label: 'Read' },
       { key: 'video', label: 'Video' },
       { key: 'quiz', label: 'Quiz' },
+      { key: 'slides', label: 'Slides' },
+      { key: 'document', label: 'File' },
     ]
     return (
       <div className="flex items-center gap-2.5 shrink-0">
@@ -465,6 +513,18 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
                       onChange={c => updateBlock(section.id, block.id, c)}
                     />
                   )}
+                  {block.type === 'slides' && (
+                    <SlideBlockEditor
+                      content={block.content as any}
+                      onChange={c => updateBlock(section.id, block.id, c)}
+                    />
+                  )}
+                  {block.type === 'document' && (
+                    <DocumentBlockEditor
+                      content={block.content as any}
+                      onChange={c => updateBlock(section.id, block.id, c)}
+                    />
+                  )}
                 </div>
               </div>
             ))}
@@ -472,7 +532,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
             {/* Add block buttons */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm text-slate-500 mr-1">Add block:</span>
-              {(['text', 'video', 'quiz'] as ContentBlockType[]).map(type => (
+              {(['text', 'video', 'quiz', 'slides', 'document'] as ContentBlockType[]).map(type => (
                 <Button
                   key={type}
                   variant="outline"
@@ -545,14 +605,30 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
               rows={3}
             />
           </div>
-          <div className="space-y-1.5 max-w-xs">
+          <div className="space-y-1.5 max-w-sm">
             <Label>Estimated Duration (minutes)</Label>
-            <Input
-              type="number"
-              min={1}
-              value={estimatedMinutes}
-              onChange={e => setEstimatedMinutes(Number(e.target.value))}
-            />
+            <div className="flex items-center gap-3">
+              <Input
+                type="number"
+                min={1}
+                value={estimatedMinutes}
+                onChange={e => setEstimatedMinutes(Number(e.target.value))}
+                className="max-w-[7rem]"
+              />
+              {recommendedMinutes !== estimatedMinutes && (
+                <button
+                  type="button"
+                  onClick={() => setEstimatedMinutes(recommendedMinutes)}
+                  className="text-xs text-blue-700 hover:underline whitespace-nowrap"
+                >
+                  Use recommended: {recommendedMinutes} min
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-slate-400">
+              Recommendation is based on actual video length (uploaded files only), reading time,
+              quiz length, and narrated slides currently in this module.
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant={isPublished ? 'success' : 'outline'}>
