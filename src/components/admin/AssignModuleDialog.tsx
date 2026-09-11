@@ -20,6 +20,7 @@ type Employee = {
   full_name: string
   department: string | null
   email: string
+  role: string
 }
 
 type TrainingOption = {
@@ -64,7 +65,9 @@ export function AssignModuleDialog({ moduleId, moduleTitle, open, onOpenChange, 
     setSelectedTrainings(preselectSectionId ? new Set([preselectSectionId]) : new Set())
 
     Promise.all([
-      supabase.from('profiles').select('id, full_name, department, email').eq('role', 'employee').eq('is_active', true).order('full_name'),
+      // All active users — admins and managers can assign trainings to
+      // themselves or each other, not just to employees.
+      supabase.from('profiles').select('id, full_name, department, email, role').eq('is_active', true).order('full_name'),
       supabase.from('assignments').select('user_id, section_id, due_date').eq('module_id', moduleId),
       supabase.from('sections').select('id, title').eq('module_id', moduleId).order('order_index'),
     ]).then(([empRes, assignRes, sectionsRes]) => {
@@ -413,8 +416,13 @@ export function AssignModuleDialog({ moduleId, moduleTitle, open, onOpenChange, 
                           }`}>
                             {isSelected && <Check className="h-2.5 w-2.5 text-white" />}
                           </div>
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 flex items-center gap-1.5">
                             <p className="text-sm text-slate-800 truncate">{emp.full_name}</p>
+                            {emp.role !== 'employee' && (
+                              <span className="text-[10px] uppercase tracking-wide text-slate-400 border border-slate-200 rounded px-1 py-0.5 shrink-0">
+                                {emp.role}
+                              </span>
+                            )}
                           </div>
                           {wasAssigned && !isSelected && (
                             <span className="text-xs text-red-400 shrink-0">Remove</span>

@@ -40,6 +40,9 @@ export default async function AdminDashboardPage() {
   const employees = (allProfiles ?? []).filter(p => p.role === 'employee' && p.is_active !== false)
   const managers = (allProfiles ?? []).filter(p => p.role === 'manager' && p.is_active !== false)
   const employeeIds = employees.map(e => e.id)
+  // For bulk-assigning trainings: everyone active, not just employees —
+  // admins/managers can assign to themselves or each other too.
+  const assignableUsers = (allProfiles ?? []).filter(p => p.is_active !== false)
 
   // Section progress for employees
   const { data: progress } = await supabase
@@ -309,7 +312,7 @@ export default async function AdminDashboardPage() {
               <Button variant="secondary" className="gap-2"><TrendingUp className="h-4 w-4" />View Reports</Button>
             </Link>
             <AdminActionButtons
-              employees={employees as any}
+              employees={assignableUsers as any}
               modules={(modules ?? []) as any}
               currentUserId={user.id}
             />

@@ -194,7 +194,14 @@ export function BulkAssignDialog({ employees, modules, currentUserId, onClose }:
                       onCheckedChange={() => toggleEmployee(emp.id)}
                     />
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-800 truncate">{emp.full_name}</p>
+                      <p className="text-sm font-medium text-slate-800 truncate flex items-center gap-1.5">
+                        {emp.full_name}
+                        {emp.role !== 'employee' && (
+                          <span className="text-[10px] uppercase tracking-wide text-slate-400 border border-slate-200 rounded px-1 py-0.5 shrink-0 font-normal">
+                            {emp.role}
+                          </span>
+                        )}
+                      </p>
                       {emp.department && <p className="text-xs text-slate-400 truncate">{emp.department}</p>}
                     </div>
                   </label>

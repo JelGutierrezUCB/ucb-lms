@@ -163,12 +163,18 @@ ${includeSlides ? `- EVERY section MUST also include a "slides" block: break the
 - estimated_minutes should reflect actual reading/learning time`
 
   try {
-    const message = await anthropic.messages.create({
+    // Streaming, not create(): the SDK requires it once max_tokens is high
+    // enough that a request could plausibly run past 10 minutes (our slides
+    // prompt's 24000 ceiling crosses that threshold) — actual completion is
+    // well within this route's 60s maxDuration, this is just how the SDK
+    // wants long-running requests initiated.
+    const stream = anthropic.messages.stream({
       model: 'claude-sonnet-4-6',
       max_tokens: includeSlides ? 24000 : 16000,
       messages: [{ role: 'user', content: userPrompt }],
       system: systemPrompt,
     })
+    const message = await stream.finalMessage()
 
     const content = message.content[0]
     if (content.type !== 'text') throw new Error('Unexpected response type')
