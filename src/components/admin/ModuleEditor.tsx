@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Plus, Trash2, GripVertical, ChevronDown, ChevronUp,
   Type, Video, HelpCircle, Save, ArrowLeft, Eye, EyeOff, Folder, FolderOpen, Check, X,
-  Presentation, FileText,
+  Presentation, FileText, UserPlus,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -22,6 +22,7 @@ import { VideoBlockEditor } from './VideoBlockEditor'
 import { QuizBlockEditor } from './QuizBlockEditor'
 import { SlideBlockEditor } from './SlideBlockEditor'
 import { DocumentBlockEditor } from './DocumentBlockEditor'
+import { AssignModuleDialog } from './AssignModuleDialog'
 import { extractYoutubeId } from '@/lib/utils'
 import type { Module, Section, ContentBlock, ContentBlockType, QuizContent, TextContent, VideoContent, SlidesContent, Group } from '@/types'
 import { MODULE_CATEGORIES } from '@/types'
@@ -92,6 +93,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
   const [sections, setSections] = useState<SectionWithBlocks[]>(initialSections)
   const recommendedMinutes = useMemo(() => estimateMinutesFromContent(sections), [sections])
   const [saving, setSaving] = useState(false)
+  const [assigningSectionId, setAssigningSectionId] = useState<string | null>(null)
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(initialSections.map(s => s.id))
   )
@@ -424,6 +426,15 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
           </div>
           {presenceBadges(section)}
           <div className="flex items-center gap-1">
+            {existingModule && !section.id.startsWith('temp_') && (
+              <button
+                onClick={e => { e.stopPropagation(); setAssigningSectionId(section.id) }}
+                title="Assign this training to employees"
+                className="p-1 rounded text-slate-400 hover:text-blue-600 mr-1"
+              >
+                <UserPlus className="h-4 w-4" />
+              </button>
+            )}
             <button
               onClick={e => { e.stopPropagation(); moveSection(section.id, 'up') }}
               disabled={siblingIdx === 0}
@@ -745,6 +756,16 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
             Save Module
           </Button>
         </div>
+      )}
+
+      {existingModule && assigningSectionId && (
+        <AssignModuleDialog
+          moduleId={existingModule.id}
+          moduleTitle={existingModule.title}
+          preselectSectionId={assigningSectionId}
+          open={!!assigningSectionId}
+          onOpenChange={open => !open && setAssigningSectionId(null)}
+        />
       )}
     </div>
   )

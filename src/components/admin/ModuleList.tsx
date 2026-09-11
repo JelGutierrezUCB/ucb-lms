@@ -129,18 +129,16 @@ export function ModuleList({ initialModules }: { initialModules: Module[] }) {
                     </Link>
                   </div>
                   <div className="flex items-center gap-2">
-                    {mod.is_published && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setAssigningModule(mod)}
-                        title="Assign to employees"
-                        className="gap-1.5"
-                      >
-                        <UserPlus className="h-3.5 w-3.5" />
-                        Assign
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setAssigningModule(mod)}
+                      title={mod.is_published ? 'Assign to employees' : 'Assign to employees (won\'t be visible to them until published)'}
+                      className="gap-1.5"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      Assign
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"

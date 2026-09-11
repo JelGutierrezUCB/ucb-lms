@@ -32,9 +32,12 @@ type Props = {
   moduleTitle: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  // When set, opens straight into "Specific Trainings" mode with this one
+  // pre-checked — used by the per-training "Assign" button in the editor.
+  preselectSectionId?: string
 }
 
-export function AssignModuleDialog({ moduleId, moduleTitle, open, onOpenChange }: Props) {
+export function AssignModuleDialog({ moduleId, moduleTitle, open, onOpenChange, preselectSectionId }: Props) {
   const supabase = createClient()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [assigned, setAssigned] = useState<Set<string>>(new Set())
@@ -57,8 +60,8 @@ export function AssignModuleDialog({ moduleId, moduleTitle, open, onOpenChange }
     if (!open) return
     setLoading(true)
     setSearch('')
-    setScope('module')
-    setSelectedTrainings(new Set())
+    setScope(preselectSectionId ? 'sections' : 'module')
+    setSelectedTrainings(preselectSectionId ? new Set([preselectSectionId]) : new Set())
 
     Promise.all([
       supabase.from('profiles').select('id, full_name, department, email').eq('role', 'employee').eq('is_active', true).order('full_name'),
@@ -91,7 +94,7 @@ export function AssignModuleDialog({ moduleId, moduleTitle, open, onOpenChange }
       const dates = [...new Set(rows.map(a => a.due_date).filter(Boolean))]
       setDueDate(dates.length === 1 ? dates[0] : '')
     }).finally(() => setLoading(false))
-  }, [open, moduleId])
+  }, [open, moduleId, preselectSectionId])
 
   const toggleTraining = (id: string) => {
     setSelectedTrainings(prev => {
