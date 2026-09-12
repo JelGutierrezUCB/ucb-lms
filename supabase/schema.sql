@@ -120,6 +120,89 @@ create table quiz_attempts (
   completed_at timestamptz default now()
 );
 
+-- Persistent record of every completion certificate issued. Snapshots the
+-- employee/company/module names and score at the moment of issuance, so a
+-- certificate stays accurate even if the person is later renamed, moved to
+-- a different company, or the module is edited/deleted afterward.
+create table certificates (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id) on delete set null,
+  module_id uuid references modules(id) on delete set null,
+  employee_name text not null,
+  company text,
+  module_title text not null,
+  score int,
+  max_score int,
+  completed_at timestamptz not null,
+  issued_at timestamptz not null default now(),
+  unique(user_id, module_id)
+);
+
+-- Auto-issues a certificate the moment a user finishes every section of a
+-- module (which, per the training player's own gating, means any quiz in
+-- those sections was already passed) — fires on every section_progress
+-- insert and checks completion for that section's module.
+create or replace function issue_certificate_on_completion()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_module_id uuid;
+  v_total_sections int;
+  v_completed_sections int;
+  v_employee_name text;
+  v_company text;
+  v_module_title text;
+  v_best_score int;
+  v_best_max int;
+begin
+  select module_id into v_module_id from sections where id = new.section_id;
+  if v_module_id is null then
+    return new;
+  end if;
+
+  select count(*) into v_total_sections from sections where module_id = v_module_id;
+
+  select count(*) into v_completed_sections
+  from section_progress sp
+  join sections s on s.id = sp.section_id
+  where sp.user_id = new.user_id and s.module_id = v_module_id;
+
+  if v_total_sections = 0 or v_completed_sections < v_total_sections then
+    return new;
+  end if;
+
+  if exists (select 1 from certificates where user_id = new.user_id and module_id = v_module_id) then
+    return new;
+  end if;
+
+  select full_name, company into v_employee_name, v_company from profiles where id = new.user_id;
+  select title into v_module_title from modules where id = v_module_id;
+
+  select qa.score, qa.max_score into v_best_score, v_best_max
+  from quiz_attempts qa
+  join content_blocks cb on cb.id = qa.content_block_id
+  join sections s on s.id = cb.section_id
+  where qa.user_id = new.user_id and s.module_id = v_module_id and qa.max_score > 0
+  order by (qa.score::float / qa.max_score) desc
+  limit 1;
+
+  insert into certificates (user_id, module_id, employee_name, company, module_title, score, max_score, completed_at)
+  values (new.user_id, v_module_id, coalesce(v_employee_name, 'Unknown'), v_company, coalesce(v_module_title, 'Untitled'), v_best_score, v_best_max, new.completed_at)
+  on conflict (user_id, module_id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_issue_certificate_on_completion on section_progress;
+create trigger trg_issue_certificate_on_completion
+  after insert on section_progress
+  for each row
+  execute function issue_certificate_on_completion();
+
 -- RLS
 alter table profiles enable row level security;
 alter table modules enable row level security;
@@ -129,6 +212,7 @@ alter table content_blocks enable row level security;
 alter table assignments enable row level security;
 alter table section_progress enable row level security;
 alter table quiz_attempts enable row level security;
+alter table certificates enable row level security;
 
 -- Profile policies
 create policy "profiles_select" on profiles for select using (true);
@@ -217,6 +301,13 @@ create policy "assignments_delete" on assignments for delete using (
 create policy "assignments_update" on assignments for update using (
   assigned_by = auth.uid() or
   exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+);
+
+-- Certificate policies
+create policy "certificates_select" on certificates for select using (
+  user_id = auth.uid()
+  or exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+  or exists (select 1 from profiles where id = auth.uid() and role = 'manager' and id = (select manager_id from profiles p2 where p2.id = certificates.user_id))
 );
 
 -- Progress policies

@@ -5,6 +5,7 @@ import { formatDate } from '@/lib/utils'
 
 async function generateCertificatePdf(opts: {
   employeeName: string
+  company?: string | null
   moduleTitle: string
   date: string
   scoreLine?: string
@@ -32,6 +33,7 @@ async function generateCertificatePdf(opts: {
     page.drawText(text, { x: (width - w) / 2, y, size, font, color })
   }
 
+  centered(opts.company ? opts.company : 'UCB Training Portal', height - 90, bold, 16, navy)
   centered('Certificate of Completion', height - 130, bold, 30, navy)
   centered('This certifies that', height - 190, regular, 14, gray)
   centered(opts.employeeName, height - 235, bold, 26, ink)
@@ -49,15 +51,48 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const { data: requester } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const admin = await createAdminClient()
+
+  const certificateId = req.nextUrl.searchParams.get('certificateId')
+  if (certificateId) {
+    // Direct lookup — used by the admin certificate registry, so it keeps
+    // working even for someone reassigned/removed from the module since.
+    const { data: cert } = await admin.from('certificates').select('*').eq('id', certificateId).single()
+    if (!cert) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    if (requester?.role !== 'admin' && user.id !== cert.user_id) {
+      const { data: target } = cert.user_id
+        ? await admin.from('profiles').select('manager_id').eq('id', cert.user_id).single()
+        : { data: null }
+      if (!target || target.manager_id !== user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
+    const scoreLine = cert.max_score && cert.max_score > 0
+      ? `Score: ${cert.score}/${cert.max_score} (${Math.round((cert.score / cert.max_score) * 100)}%)`
+      : undefined
+    const pdf = await generateCertificatePdf({
+      employeeName: cert.employee_name,
+      company: cert.company,
+      moduleTitle: cert.module_title,
+      date: formatDate(cert.completed_at),
+      scoreLine,
+    })
+    return new NextResponse(Buffer.from(pdf), {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="certificate-${cert.module_title.replace(/[^a-z0-9]+/gi, '-')}.pdf"`,
+      },
+    })
+  }
+
   const userId = req.nextUrl.searchParams.get('userId')
   const moduleId = req.nextUrl.searchParams.get('moduleId')
   if (!userId || !moduleId) {
     return NextResponse.json({ error: 'Missing userId or moduleId' }, { status: 400 })
   }
-
-  const { data: requester } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-
-  const admin = await createAdminClient()
 
   // Authorization: admin, the employee's manager, or the employee themselves
   if (requester?.role !== 'admin' && user.id !== userId) {
@@ -67,9 +102,38 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const { data: profile } = await admin.from('profiles').select('full_name').eq('id', userId).single()
+  const { data: profile } = await admin.from('profiles').select('full_name, company').eq('id', userId).single()
   const { data: mod } = await admin.from('modules').select('title').eq('id', moduleId).single()
   if (!profile || !mod) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // Prefer the persisted certificate record (auto-issued on completion) —
+  // it's a frozen snapshot, so it stays accurate even if the module or
+  // profile changes later, and it's what the admin registry lists.
+  const { data: issued } = await admin
+    .from('certificates')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('module_id', moduleId)
+    .maybeSingle()
+
+  if (issued) {
+    const scoreLine = issued.max_score && issued.max_score > 0
+      ? `Score: ${issued.score}/${issued.max_score} (${Math.round((issued.score / issued.max_score) * 100)}%)`
+      : undefined
+    const pdf = await generateCertificatePdf({
+      employeeName: issued.employee_name,
+      company: issued.company,
+      moduleTitle: issued.module_title,
+      date: formatDate(issued.completed_at),
+      scoreLine,
+    })
+    return new NextResponse(Buffer.from(pdf), {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="certificate-${issued.module_title.replace(/[^a-z0-9]+/gi, '-')}.pdf"`,
+      },
+    })
+  }
 
   // Prefer a manually recorded completion (e.g. in-person/proxy training)
   const { data: manual } = await admin
@@ -88,6 +152,7 @@ export async function GET(req: NextRequest) {
     const scoreLine = manual.max_score > 0 ? `Score: ${manual.score}/${manual.max_score}` : undefined
     const pdf = await generateCertificatePdf({
       employeeName: profile.full_name,
+      company: profile.company,
       moduleTitle: mod.title,
       date: formatDate(manual.completion_date),
       scoreLine,
@@ -146,6 +211,7 @@ export async function GET(req: NextRequest) {
 
   const pdf = await generateCertificatePdf({
     employeeName: profile.full_name,
+    company: profile.company,
     moduleTitle: mod.title,
     date: formatDate(completedAt),
     scoreLine,

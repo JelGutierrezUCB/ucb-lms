@@ -12,6 +12,7 @@ import {
   GraduationCap,
   BarChart3,
   Target,
+  Award,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
@@ -64,6 +65,12 @@ const navItems: NavItem[] = [
     href: '/reports',
     label: 'Reports',
     icon: <BarChart3 className="h-5 w-5" />,
+    roles: ['admin', 'manager'],
+  },
+  {
+    href: '/certificates',
+    label: 'Certificates',
+    icon: <Award className="h-5 w-5" />,
     roles: ['admin', 'manager'],
   },
   {

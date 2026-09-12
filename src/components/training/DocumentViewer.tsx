@@ -130,8 +130,11 @@ export function DocumentViewer({ blockId, content }: Props) {
       </div>
 
       {isPdf && (
-        <div className="rounded-xl overflow-hidden border border-slate-200" style={{ height: '70vh' }}>
-          <iframe src={url} className="w-full h-full" title={content.file_name} />
+        <div className="rounded-xl overflow-hidden border border-slate-200" style={{ height: '85vh' }}>
+          {/* Fragment params tell the browser's built-in PDF viewer to fit the
+              page to the frame's width and hide its toolbar/thumbnail sidebar —
+              without this it defaults to a small zoom that needs scrolling. */}
+          <iframe src={`${url}#toolbar=0&navpanes=0&view=FitH`} className="w-full h-full" title={content.file_name} />
         </div>
       )}
 

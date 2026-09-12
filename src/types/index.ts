@@ -144,6 +144,19 @@ export interface SectionProgress {
   completed_at: string
 }
 
+export interface Certificate {
+  id: string
+  user_id: string | null
+  module_id: string | null
+  employee_name: string
+  company: string | null
+  module_title: string
+  score: number | null
+  max_score: number | null
+  completed_at: string
+  issued_at: string
+}
+
 export interface QuizAttempt {
   id: string
   user_id: string
