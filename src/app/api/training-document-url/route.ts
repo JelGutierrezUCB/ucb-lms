@@ -49,5 +49,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Failed to generate link: ${error?.message ?? 'unknown error'}` }, { status: 500 })
   }
 
-  return NextResponse.json({ url: signed.signedUrl, fileName: content.file_name, mimeType: content.mime_type })
+  // Word docs can't be viewed natively in a browser — convert to HTML
+  // (mammoth preserves the doc's actual hyperlinks as clickable <a> tags)
+  // so it renders inline instead of forcing a download.
+  const lowerName = content.file_name.toLowerCase()
+  let html: string | null = null
+  if (lowerName.endsWith('.docx') || lowerName.endsWith('.doc')) {
+    try {
+      const { data: fileBlob } = await admin.storage.from('training-source-docs').download(content.storage_path)
+      if (fileBlob) {
+        const buffer = Buffer.from(await fileBlob.arrayBuffer())
+        const mammoth = await import('mammoth')
+        const result = await mammoth.convertToHtml({ buffer })
+        html = result.value
+      }
+    } catch {
+      // Fall through — client still gets the signed URL for Open/Download.
+    }
+  }
+
+  return NextResponse.json({ url: signed.signedUrl, fileName: content.file_name, mimeType: content.mime_type, html })
 }

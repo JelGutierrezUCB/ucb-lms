@@ -9,8 +9,29 @@ interface Props {
   content: DocumentContent
 }
 
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp)$/i
+const OFFICE_EXT = /\.(pptx?|xlsx?)$/i
+const TEXT_EXT = /\.(txt|csv|md|log)$/i
+
+// Turns bare "https://..." runs in plain text into real clickable links,
+// since a .txt/.csv file has no markup to carry hyperlinks of its own.
+function linkifyPlainText(text: string) {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g)
+  return parts.map((part, i) =>
+    /^https?:\/\//.test(part) ? (
+      <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline break-all">
+        {part}
+      </a>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  )
+}
+
 export function DocumentViewer({ blockId, content }: Props) {
   const [url, setUrl] = useState<string | null>(null)
+  const [html, setHtml] = useState<string | null>(null)
+  const [text, setText] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -18,21 +39,44 @@ export function DocumentViewer({ blockId, content }: Props) {
     let cancelled = false
     setLoading(true)
     setError(null)
+    setHtml(null)
+    setText(null)
+
     fetch('/api/training-document-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contentBlockId: blockId }),
     })
       .then(res => res.json())
-      .then(data => {
+      .then(async data => {
         if (cancelled) return
         if (data.error) { setError(data.error); return }
         setUrl(data.url)
+        if (data.html) {
+          setHtml(data.html)
+        } else if (TEXT_EXT.test(content.file_name)) {
+          try {
+            const res = await fetch(data.url)
+            if (!cancelled) setText(await res.text())
+          } catch {
+            // Falls back to the Open/Download row below.
+          }
+        }
       })
       .catch(() => { if (!cancelled) setError('Failed to load document') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [blockId])
+  }, [blockId, content.file_name])
+
+  // Mammoth's output has no target on its <a> tags — intercept clicks so
+  // links open in a new tab instead of navigating this app away.
+  const handleHtmlClick = (e: React.MouseEvent) => {
+    const anchor = (e.target as HTMLElement).closest('a')
+    if (anchor?.href) {
+      e.preventDefault()
+      window.open(anchor.href, '_blank', 'noopener,noreferrer')
+    }
+  }
 
   if (!content?.storage_path) {
     return (
@@ -60,6 +104,8 @@ export function DocumentViewer({ blockId, content }: Props) {
   }
 
   const isPdf = content.mime_type === 'application/pdf' || content.file_name.toLowerCase().endsWith('.pdf')
+  const isImage = IMAGE_EXT.test(content.file_name)
+  const isOffice = OFFICE_EXT.test(content.file_name)
 
   return (
     <div className="space-y-3">
@@ -86,6 +132,39 @@ export function DocumentViewer({ blockId, content }: Props) {
       {isPdf && (
         <div className="rounded-xl overflow-hidden border border-slate-200" style={{ height: '70vh' }}>
           <iframe src={url} className="w-full h-full" title={content.file_name} />
+        </div>
+      )}
+
+      {isImage && (
+        <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
+          <img src={url} alt={content.file_name} className="max-w-full max-h-[75vh] object-contain" />
+        </div>
+      )}
+
+      {html && (
+        <div
+          onClick={handleHtmlClick}
+          className="rounded-xl border border-slate-200 bg-white p-6 max-h-[75vh] overflow-y-auto prose"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      )}
+
+      {text != null && (
+        <pre className="rounded-xl border border-slate-200 bg-slate-50 p-4 max-h-[75vh] overflow-auto text-sm text-slate-700 whitespace-pre-wrap break-words">
+          {linkifyPlainText(text)}
+        </pre>
+      )}
+
+      {isOffice && !html && (
+        <div className="rounded-xl overflow-hidden border border-slate-200" style={{ height: '70vh' }}>
+          <iframe
+            src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`}
+            className="w-full h-full"
+            title={content.file_name}
+          />
+          <p className="text-xs text-slate-400 text-center py-1.5 bg-slate-50 border-t border-slate-200">
+            Viewed via Microsoft Office Online — use Open above if this doesn't load
+          </p>
         </div>
       )}
     </div>
