@@ -70,23 +70,31 @@ export default async function TrainingPage({
     }
   }
 
-  // If viewing as proxy employee, show only their assigned modules
-  // Admins/managers viewing their own training see all published modules
+  // If viewing as proxy employee, show only their assigned modules.
+  // Admins/managers viewing their own training see all published modules,
+  // PLUS anything explicitly assigned to them even if still a draft — an
+  // assignment is a deliberate act and should always be visible to the
+  // person it was given to, publish status aside.
   const isProxy = effectiveUserId !== user.id
   if (!isProxy && ['admin', 'manager'].includes(currentProfile?.role ?? '')) {
-    const { data } = await supabase
-      .from('modules')
-      .select('*')
-      .eq('is_published', true)
-      .order('created_at', { ascending: false })
-    modules = data ?? []
+    const [{ data: published }, { data: assignedDrafts }] = await Promise.all([
+      supabase.from('modules').select('*').eq('is_published', true).order('created_at', { ascending: false }),
+      assignedModuleIds.length
+        ? supabase.from('modules').select('*').in('id', assignedModuleIds).eq('is_published', false)
+        : Promise.resolve({ data: [] as Module[] }),
+    ])
+    const seen = new Set<string>()
+    modules = [...(published ?? []), ...(assignedDrafts ?? [])].filter(m => {
+      if (seen.has(m.id)) return false
+      seen.add(m.id)
+      return true
+    })
   } else {
     if (assignedModuleIds.length) {
       const { data } = await supabase
         .from('modules')
         .select('*')
         .in('id', assignedModuleIds)
-        .eq('is_published', true)
         .order('title')
       modules = data ?? []
     }
