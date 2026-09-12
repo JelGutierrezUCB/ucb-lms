@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { FileText, Download, ExternalLink, Loader2 } from 'lucide-react'
 import type { DocumentContent } from '@/types'
+import { openLinksInNewTab } from '@/lib/openLinksInNewTab'
 
 interface Props {
   blockId: string
@@ -67,16 +68,6 @@ export function DocumentViewer({ blockId, content }: Props) {
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [blockId, content.file_name])
-
-  // Mammoth's output has no target on its <a> tags — intercept clicks so
-  // links open in a new tab instead of navigating this app away.
-  const handleHtmlClick = (e: React.MouseEvent) => {
-    const anchor = (e.target as HTMLElement).closest('a')
-    if (anchor?.href) {
-      e.preventDefault()
-      window.open(anchor.href, '_blank', 'noopener,noreferrer')
-    }
-  }
 
   if (!content?.storage_path) {
     return (
@@ -146,7 +137,7 @@ export function DocumentViewer({ blockId, content }: Props) {
 
       {html && (
         <div
-          onClick={handleHtmlClick}
+          onClick={openLinksInNewTab}
           className="rounded-xl border border-slate-200 bg-white p-6 max-h-[75vh] overflow-y-auto prose"
           dangerouslySetInnerHTML={{ __html: html }}
         />
