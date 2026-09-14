@@ -44,6 +44,16 @@ function generateId() {
 
 const UNGROUPED = '__ungrouped__'
 
+type DurationUnit = 'minutes' | 'hours' | 'days'
+const MINUTES_PER_UNIT: Record<DurationUnit, number> = { minutes: 1, hours: 60, days: 60 * 24 }
+// estimated_minutes is always the value stored in the DB — these just convert
+// what's displayed/typed in the "Estimated Duration" field to/from that.
+const minutesToUnit = (minutes: number, unit: DurationUnit) => {
+  const value = minutes / MINUTES_PER_UNIT[unit]
+  return Math.round(value * 100) / 100 // up to 2 decimals, no float noise
+}
+const unitToMinutes = (value: number, unit: DurationUnit) => Math.max(1, Math.round(value * MINUTES_PER_UNIT[unit]))
+
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, ' ')
 const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).length
 
@@ -89,6 +99,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
   const [description, setDescription] = useState(existingModule?.description ?? '')
   const [category, setCategory] = useState(existingModule?.category ?? 'general')
   const [estimatedMinutes, setEstimatedMinutes] = useState(existingModule?.estimated_minutes ?? 30)
+  const [durationUnit, setDurationUnit] = useState<'minutes' | 'hours' | 'days'>('minutes')
   const [isPublished, setIsPublished] = useState(existingModule?.is_published ?? false)
   const [groups, setGroups] = useState<Group[]>(initialGroups)
   const [sections, setSections] = useState<SectionWithBlocks[]>(initialSections)
@@ -102,6 +113,17 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     new Set(initialGroups.map(g => g.id))
   )
+  // Per-block collapse, independent of the training (section) it's in — lets
+  // an admin fold up blocks they're done with so a training with many blocks
+  // doesn't become an unwieldy wall of open editors while adding more.
+  const [collapsedBlocks, setCollapsedBlocks] = useState<Set<string>>(new Set())
+  const toggleBlockCollapsed = (blockId: string) => {
+    setCollapsedBlocks(prev => {
+      const next = new Set(prev)
+      next.has(blockId) ? next.delete(blockId) : next.add(blockId)
+      return next
+    })
+  }
   const pendingScrollId = useRef<string | null>(null)
 
   useEffect(() => {
@@ -572,24 +594,37 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
               </div>
             )}
 
-            {section.content_blocks.map((block, bi) => (
+            {section.content_blocks.map((block, bi) => {
+              const isBlockCollapsed = collapsedBlocks.has(block.id)
+              return (
               <div key={block.id} className="rounded-xl border border-slate-200 overflow-hidden">
                 {/* Block header */}
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                <div
+                  className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 cursor-pointer"
+                  onClick={() => toggleBlockCollapsed(block.id)}
+                >
                   <span className="text-slate-400">{blockTypeIcons[block.type]}</span>
                   <span className="text-sm font-medium text-slate-700">{blockTypeLabels[block.type]}</span>
                   <span className="text-xs text-slate-400 ml-1">Block {bi + 1}</span>
-                  <div className="ml-auto">
+                  {block.title && (
+                    <span className="text-xs text-slate-400 truncate max-w-xs">— {block.title}</span>
+                  )}
+                  <div className="ml-auto flex items-center gap-1">
                     <button
-                      onClick={() => removeBlock(section.id, block.id)}
+                      onClick={e => { e.stopPropagation(); removeBlock(section.id, block.id) }}
                       className="p-1 rounded text-slate-400 hover:text-red-600 transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
+                    {isBlockCollapsed
+                      ? <ChevronDown className="h-4 w-4 text-slate-400 ml-1" />
+                      : <ChevronUp className="h-4 w-4 text-slate-400 ml-1" />
+                    }
                   </div>
                 </div>
 
                 {/* Block editor */}
+                {!isBlockCollapsed && (
                 <div className="p-4 space-y-4">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Title shown to employees (optional)</Label>
@@ -634,8 +669,10 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
                     />
                   )}
                 </div>
+                )}
               </div>
-            ))}
+              )
+            })}
 
             {/* Add block buttons */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -714,16 +751,25 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
               rows={3}
             />
           </div>
-          <div className="space-y-1.5 max-w-sm">
-            <Label>Estimated Duration (minutes)</Label>
-            <div className="flex items-center gap-3">
+          <div className="space-y-1.5 max-w-lg">
+            <Label>Estimated Duration</Label>
+            <div className="flex items-center gap-3 flex-wrap">
               <Input
                 type="number"
-                min={1}
-                value={estimatedMinutes}
-                onChange={e => setEstimatedMinutes(Number(e.target.value))}
+                min={0.01}
+                step="any"
+                value={minutesToUnit(estimatedMinutes, durationUnit)}
+                onChange={e => setEstimatedMinutes(unitToMinutes(Number(e.target.value), durationUnit))}
                 className="max-w-[7rem]"
               />
+              <Select value={durationUnit} onValueChange={v => setDurationUnit(v as DurationUnit)}>
+                <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="minutes">Minutes</SelectItem>
+                  <SelectItem value="hours">Hours</SelectItem>
+                  <SelectItem value="days">Days</SelectItem>
+                </SelectContent>
+              </Select>
               {recommendedMinutes !== estimatedMinutes && (
                 <button
                   type="button"
