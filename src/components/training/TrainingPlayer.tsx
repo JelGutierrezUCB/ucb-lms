@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, Circle, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Trophy, BookOpen, Clock } from 'lucide-react'
+import { CheckCircle, Circle, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Trophy, BookOpen, Clock, Lock, Award } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -54,6 +54,17 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
   const hasQuiz = currentSection?.content_blocks.some(b => b.type === 'quiz')
   const quizBlockId = currentSection?.content_blocks.find(b => b.type === 'quiz')?.id
   const canComplete = !hasQuiz || (quizBlockId ? quizPassed.has(quizBlockId) : true)
+
+  // A section is reachable if it's already done, the one right after the
+  // learner's last completed section, or one they've reached this session —
+  // without this, the sidebar list let anyone click straight past an
+  // unpassed quiz to any later section, bypassing the gate entirely.
+  const isSectionAccessible = (i: number) => {
+    if (i === 0) return true
+    if (completedSections.has(sections[i].id)) return true
+    if (i <= currentSectionIndex) return true
+    return completedSections.has(sections[i - 1].id)
+  }
 
   const markSectionComplete = async () => {
     if (!currentSection || completedSections.has(currentSection.id)) {
@@ -167,19 +178,26 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
           {sections.map((section, i) => {
             const isComplete = completedSections.has(section.id)
             const isCurrent = i === currentSectionIndex
+            const accessible = isSectionAccessible(i)
             return (
               <button
                 key={section.id}
-                onClick={() => setCurrentSectionIndex(i)}
+                onClick={() => {
+                  if (accessible) setCurrentSectionIndex(i)
+                  else toast.error('Complete the current training (and pass its quiz, if any) to unlock this one.')
+                }}
                 className={cn(
                   'w-full text-left flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors',
-                  isCurrent ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
+                  isCurrent ? 'bg-blue-50 text-blue-700' :
+                  accessible ? 'text-slate-700 hover:bg-slate-50' : 'text-slate-400 cursor-not-allowed'
                 )}
               >
                 {isComplete ? (
                   <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />
-                ) : (
+                ) : accessible ? (
                   <Circle className={cn('h-5 w-5 shrink-0', isCurrent ? 'text-blue-500' : 'text-slate-300')} />
+                ) : (
+                  <Lock className="h-4 w-4 shrink-0 text-slate-300" />
                 )}
                 <span className={cn('line-clamp-2', isCurrent && 'font-medium')}>{section.title}</span>
               </button>
@@ -197,10 +215,15 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
             </div>
             <h2 className="text-2xl font-bold text-slate-900 mb-2">Training Complete!</h2>
             <p className="text-slate-500 mb-6">
-              You've completed all {totalSections} sections of <strong>{module.title}</strong>.
+              You've completed all {totalSections} sections of <strong>{module.title}</strong>. Congratulations!
             </p>
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setCurrentSectionIndex(0)}>Review from Start</Button>
+              <a href={`/api/certificate?userId=${activeUserId}&moduleId=${module.id}`} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" className="gap-1.5">
+                  <Award className="h-4 w-4" /> Download Certificate
+                </Button>
+              </a>
               <Button onClick={() => router.push('/training')}>Back to Catalog</Button>
             </div>
           </div>

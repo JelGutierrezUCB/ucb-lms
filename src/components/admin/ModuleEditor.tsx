@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Plus, Trash2, GripVertical, ChevronDown, ChevronUp,
   Type, Video, HelpCircle, Save, ArrowLeft, Eye, EyeOff, Folder, FolderOpen, Check, X,
-  Presentation, FileText, UserPlus, Archive, ArchiveRestore,
+  Presentation, FileText, UserPlus, Archive, ArchiveRestore, ArrowUp, ArrowDown,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -103,6 +103,13 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
   const [isPublished, setIsPublished] = useState(existingModule?.is_published ?? false)
   const [groups, setGroups] = useState<Group[]>(initialGroups)
   const [sections, setSections] = useState<SectionWithBlocks[]>(initialSections)
+  // What's actually saved in the DB right now — starts as the page's initial
+  // load, then advances after every successful save. Diffing handleSave's
+  // inserts/updates/deletes against this (not the original page-load props)
+  // keeps a second save-without-reload correct, e.g. a training added then
+  // removed across two saves still gets deleted rather than left orphaned.
+  const [savedGroups, setSavedGroups] = useState<Group[]>(initialGroups)
+  const [savedSections, setSavedSections] = useState<SectionWithBlocks[]>(initialSections)
   const recommendedMinutes = useMemo(() => estimateMinutesFromContent(sections), [sections])
   const [saving, setSaving] = useState(false)
   const [assigningSectionId, setAssigningSectionId] = useState<string | null>(null)
@@ -329,6 +336,18 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
     ))
   }
 
+  const moveBlock = (sectionId: string, blockId: string, direction: 'up' | 'down') => {
+    setSections(prev => prev.map(s => {
+      if (s.id !== sectionId) return s
+      const i = s.content_blocks.findIndex(b => b.id === blockId)
+      const j = direction === 'up' ? i - 1 : i + 1
+      if (i === -1 || j < 0 || j >= s.content_blocks.length) return s
+      const blocks = [...s.content_blocks]
+      ;[blocks[i], blocks[j]] = [blocks[j], blocks[i]]
+      return { ...s, content_blocks: blocks }
+    }))
+  }
+
   const handleSave = async () => {
     if (!title.trim()) { toast.error('Module title is required'); return }
 
@@ -366,14 +385,14 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
       // fresh id on every single save, which (via on-delete-cascade FKs)
       // silently wiped employee completion progress, per-training
       // assignments, and quiz attempt history each time a module was edited.
-      const initialGroupIds = new Set(initialGroups.map(g => g.id))
+      const initialGroupIds = new Set(savedGroups.map(g => g.id))
       const currentGroupIds = new Set(groups.map(g => g.id))
       const removedGroupIds = [...initialGroupIds].filter(id => !currentGroupIds.has(id))
       if (removedGroupIds.length > 0) {
         await supabase.from('groups').delete().in('id', removedGroupIds)
       }
 
-      const initialSectionIds = new Set(initialSections.map(s => s.id))
+      const initialSectionIds = new Set(savedSections.map(s => s.id))
       const currentSectionIds = new Set(sections.map(s => s.id))
       const removedSectionIds = [...initialSectionIds].filter(id => !currentSectionIds.has(id))
       if (removedSectionIds.length > 0) {
@@ -402,7 +421,9 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
         }
       }
 
-      const initialSectionById = new Map(initialSections.map(s => [s.id, s]))
+      const initialSectionById = new Map(savedSections.map(s => [s.id, s]))
+      const sectionIdRemap: Record<string, string> = {}
+      const blockIdRemap: Record<string, string> = {}
 
       for (let si = 0; si < sections.length; si++) {
         const section = sections[si]
@@ -417,6 +438,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
             .single()
           if (error) throw error
           sectionId = sectionData.id
+          sectionIdRemap[section.id] = sectionId
         } else {
           sectionId = section.id
           const { error } = await supabase
@@ -446,10 +468,13 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
           }
 
           if (block.id.startsWith('temp_')) {
-            const { error } = await supabase
+            const { data: blockData, error } = await supabase
               .from('content_blocks')
               .insert({ section_id: sectionId, type: block.type, order_index: bi, title: block.title || null, content })
+              .select()
+              .single()
             if (error) throw error
+            blockIdRemap[block.id] = blockData.id
           } else {
             const { error } = await supabase
               .from('content_blocks')
@@ -457,6 +482,65 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
               .eq('id', block.id)
             if (error) throw error
           }
+        }
+      }
+
+      if (existingModule) {
+        // Swap temp_ ids for their real, saved ones in local state — without
+        // this, a newly-added training/block would silently render collapsed
+        // right after saving (its "expanded" flag was tracked under the old
+        // id, which no longer matches anything), and re-saving without a
+        // reload would try to insert it as a brand new row all over again.
+        const remappedGroups = groups.map(g => groupIdMap[g.id] ? { ...g, id: groupIdMap[g.id] } : g)
+        const remappedSections = sections.map(s => {
+          const newSectionId = sectionIdRemap[s.id]
+          return {
+            ...s,
+            id: newSectionId ?? s.id,
+            group_id: s.group_id ? (groupIdMap[s.group_id] ?? s.group_id) : s.group_id,
+            content_blocks: s.content_blocks.map(b => ({
+              ...b,
+              id: blockIdRemap[b.id] ?? b.id,
+              section_id: newSectionId ?? s.id,
+            })),
+          }
+        })
+
+        setGroups(remappedGroups)
+        setSections(remappedSections)
+        // Advances the "what's actually saved" baseline so a second save
+        // (without a reload) diffs against this instead of the page's
+        // original load — otherwise a training added then removed across
+        // two saves would never actually get deleted from the database.
+        setSavedGroups(remappedGroups)
+        setSavedSections(remappedSections)
+
+        if (Object.keys(groupIdMap).length) {
+          setExpandedGroups(prev => {
+            const next = new Set(prev)
+            for (const [oldId, newId] of Object.entries(groupIdMap)) {
+              if (next.has(oldId)) { next.delete(oldId); next.add(newId) }
+            }
+            return next
+          })
+        }
+        if (Object.keys(sectionIdRemap).length) {
+          setExpandedSections(prev => {
+            const next = new Set(prev)
+            for (const [oldId, newId] of Object.entries(sectionIdRemap)) {
+              if (next.has(oldId)) { next.delete(oldId); next.add(newId) }
+            }
+            return next
+          })
+        }
+        if (Object.keys(blockIdRemap).length) {
+          setCollapsedBlocks(prev => {
+            const next = new Set(prev)
+            for (const [oldId, newId] of Object.entries(blockIdRemap)) {
+              if (next.has(oldId)) { next.delete(oldId); next.add(newId) }
+            }
+            return next
+          })
         }
       }
 
@@ -611,8 +695,22 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
                   )}
                   <div className="ml-auto flex items-center gap-1">
                     <button
+                      onClick={e => { e.stopPropagation(); moveBlock(section.id, block.id, 'up') }}
+                      disabled={bi === 0}
+                      className="p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30"
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); moveBlock(section.id, block.id, 'down') }}
+                      disabled={bi === section.content_blocks.length - 1}
+                      className="p-1 rounded text-slate-400 hover:text-slate-700 disabled:opacity-30"
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </button>
+                    <button
                       onClick={e => { e.stopPropagation(); removeBlock(section.id, block.id) }}
-                      className="p-1 rounded text-slate-400 hover:text-red-600 transition-colors"
+                      className="p-1 rounded text-slate-400 hover:text-red-600 transition-colors ml-1"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>

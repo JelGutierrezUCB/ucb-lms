@@ -41,6 +41,7 @@ async function generateCertificatePdf(opts: {
   centered(opts.moduleTitle, height - 315, bold, 20, ink)
   if (opts.scoreLine) centered(opts.scoreLine, height - 350, regular, 12, gray)
   centered(`Completed on ${opts.date}`, height - 380, regular, 12, gray)
+  centered('Congratulations on completing your training!', height - 420, bold, 13, navy)
   centered('UCB Training Portal', 55, regular, 10, gray)
 
   return doc.save()

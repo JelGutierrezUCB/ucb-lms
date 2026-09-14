@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { Profile, Module } from '@/types'
 import { formatDate, getCategoryLabel } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { QuizAnswersDialog } from './QuizAnswersDialog'
 
 // Production facility codes — employees at these locations get the Production tab
 const PRODUCTION_CODES = ['HA', 'ML', 'HV', 'MLC', 'HVP']
@@ -63,6 +64,7 @@ export function ReportsView({ employees, modules, assignments: rawAssignments, s
   const [filterDept, setFilterDept] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null)
+  const [reviewAttempt, setReviewAttempt] = useState<{ id: string; employeeName: string } | null>(null)
   // Production tab state
   const [prodFacility, setProdFacility] = useState('all')
   const [prodScope, setProdScope] = useState<'combined' | 'warehouse' | 'lms'>('combined')
@@ -750,6 +752,7 @@ export function ReportsView({ employees, modules, assignments: rawAssignments, s
                                         <th className="text-left px-3 py-2 text-slate-600 font-medium">Date</th>
                                         <th className="text-center px-3 py-2 text-slate-600 font-medium">Score</th>
                                         <th className="text-center px-3 py-2 text-slate-600 font-medium">Result</th>
+                                        <th className="text-center px-3 py-2 text-slate-600 font-medium">Answers</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 bg-white">
@@ -763,6 +766,14 @@ export function ReportsView({ employees, modules, assignments: rawAssignments, s
                                               <Badge variant={pct >= 70 ? 'success' : 'danger'} className="text-xs">
                                                 {pct >= 70 ? 'Passed' : 'Failed'}
                                               </Badge>
+                                            </td>
+                                            <td className="px-3 py-2 text-center">
+                                              <button
+                                                onClick={() => setReviewAttempt({ id: qa.id, employeeName: emp.full_name })}
+                                                className="text-blue-600 hover:underline"
+                                              >
+                                                View
+                                              </button>
                                             </td>
                                           </tr>
                                         )
@@ -785,6 +796,12 @@ export function ReportsView({ employees, modules, assignments: rawAssignments, s
       </Card>
 
       </> /* end All/Office tab */}
+
+      <QuizAnswersDialog
+        attemptId={reviewAttempt?.id ?? null}
+        employeeName={reviewAttempt?.employeeName ?? ''}
+        onOpenChange={open => !open && setReviewAttempt(null)}
+      />
     </div>
   )
 }

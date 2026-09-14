@@ -23,7 +23,6 @@ export function QuizViewer({ block, userId, onPass }: Props) {
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
-  const mcQuestions = content.questions.filter(q => (q.type ?? 'multiple_choice') === 'multiple_choice')
   const totalQ = content.questions.length
   const allAnswered = content.questions.every((q, qi) => {
     const a = answers[qi]
@@ -52,14 +51,18 @@ export function QuizViewer({ block, userId, onPass }: Props) {
     if (!allAnswered) { toast.error('Please answer all questions'); return }
     setSaving(true)
 
+    // Long-answer questions can't be auto-graded for correctness, so any
+    // answered one (submission already requires every question answered)
+    // automatically earns its point toward the score, same as a correct MC pick.
     const correctCount = content.questions.reduce((acc, q, qi) => {
-      if ((q.type ?? 'multiple_choice') !== 'multiple_choice') return acc
+      const isLongAnswer = (q.type ?? 'multiple_choice') === 'long_answer'
+      if (isLongAnswer) {
+        return acc + (typeof answers[qi] === 'string' && answers[qi].trim().length > 0 ? 1 : 0)
+      }
       return acc + (answers[qi] === q.correct_index ? 1 : 0)
     }, 0)
-    // Long-answer-only quizzes have nothing to auto-grade — treat as passed once submitted.
-    const scorePercent = mcQuestions.length > 0
-      ? Math.round((correctCount / mcQuestions.length) * 100)
-      : 100
+    const maxScore = totalQ
+    const scorePercent = maxScore > 0 ? Math.round((correctCount / maxScore) * 100) : 100
 
     const answerArray = content.questions.map((_, qi) => answers[qi])
 
@@ -67,7 +70,7 @@ export function QuizViewer({ block, userId, onPass }: Props) {
       user_id: userId,
       content_block_id: block.id,
       score: correctCount,
-      max_score: mcQuestions.length,
+      max_score: maxScore,
       answers: answerArray,
     })
 
@@ -76,7 +79,7 @@ export function QuizViewer({ block, userId, onPass }: Props) {
     setSaving(false)
 
     if (scorePercent >= content.passing_score) {
-      toast.success(mcQuestions.length > 0 ? `Quiz passed with ${scorePercent}%!` : 'Answers submitted!')
+      toast.success(`Quiz passed with ${scorePercent}%!`)
       onPass()
     } else {
       toast.error(`Score: ${scorePercent}%. Need ${content.passing_score}% to pass.`)
@@ -120,7 +123,7 @@ export function QuizViewer({ block, userId, onPass }: Props) {
           </div>
           {!passed && (
             <Button variant="outline" size="sm" onClick={handleRetry} className="ml-auto shrink-0">
-              Retry
+              Retake
             </Button>
           )}
         </div>
@@ -148,7 +151,7 @@ export function QuizViewer({ block, userId, onPass }: Props) {
               {submitted && (
                 <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-600 flex items-start gap-2">
                   <MessageSquare className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
-                  <span>Submitted for manual review — this doesn&apos;t affect your score.</span>
+                  <span>Credited automatically for a complete answer — an admin can still review it in Reports.</span>
                 </div>
               )}
             </div>

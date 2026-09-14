@@ -68,13 +68,13 @@ export function DocumentBlockEditor({ content, onChange }: Props) {
     window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
   }
 
-  const setSourceMode = (next: Source) => {
-    setSource(next)
-    // Clear whichever mode's data isn't active, so switching back and forth
-    // doesn't end up saving both a file and a link on the same block.
-    if (next === 'link' && content.storage_path) onChange({ storage_path: '', file_name: '', link_url: content.link_url })
-    if (next === 'upload' && content.link_url) onChange({ storage_path: content.storage_path, file_name: content.file_name, link_url: undefined })
-  }
+  // Purely a display toggle — must NOT touch `content`. It used to clear
+  // whichever mode's data wasn't currently shown, which meant just clicking
+  // "Link to URL" on an already-uploaded file silently wiped storage_path in
+  // memory, and clicking back to "Upload File" never restored it since there
+  // was no link_url to detect. Saving after that broke the file reference
+  // permanently even though the file itself was still sitting in storage.
+  const setSourceMode = (next: Source) => setSource(next)
 
   return (
     <div className="space-y-3">
@@ -142,7 +142,7 @@ export function DocumentBlockEditor({ content, onChange }: Props) {
               <Label className="text-xs">URL</Label>
               <Input
                 value={content.link_url ?? ''}
-                onChange={e => onChange({ ...content, link_url: e.target.value })}
+                onChange={e => onChange({ storage_path: '', file_name: content.file_name, link_url: e.target.value })}
                 placeholder="https://..."
               />
             </div>
