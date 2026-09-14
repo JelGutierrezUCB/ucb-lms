@@ -46,6 +46,7 @@ create table sections (
   group_id uuid references groups(id) on delete set null,
   title text not null,
   order_index int not null default 0,
+  is_archived boolean not null default false,
   created_at timestamptz default now()
 );
 
@@ -55,6 +56,7 @@ create table content_blocks (
   section_id uuid references sections(id) on delete cascade not null,
   type text not null check (type in ('text', 'video', 'quiz', 'slides', 'document')),
   order_index int not null default 0,
+  title text,
   content jsonb not null default '{}',
   created_at timestamptz default now()
 );
@@ -163,12 +165,14 @@ begin
     return new;
   end if;
 
-  select count(*) into v_total_sections from sections where module_id = v_module_id;
+  -- Archived trainings aren't part of the active curriculum anymore, so
+  -- they don't count toward what's required for a certificate.
+  select count(*) into v_total_sections from sections where module_id = v_module_id and is_archived = false;
 
   select count(*) into v_completed_sections
   from section_progress sp
   join sections s on s.id = sp.section_id
-  where sp.user_id = new.user_id and s.module_id = v_module_id;
+  where sp.user_id = new.user_id and s.module_id = v_module_id and s.is_archived = false;
 
   if v_total_sections = 0 or v_completed_sections < v_total_sections then
     return new;

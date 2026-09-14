@@ -51,6 +51,7 @@ export interface Section {
   group_id?: string | null
   title: string
   order_index: number
+  is_archived: boolean
   created_at: string
   content_blocks?: ContentBlock[]
 }
@@ -121,6 +122,7 @@ export interface ContentBlock {
   section_id: string
   type: ContentBlockType
   order_index: number
+  title?: string | null // optional heading shown to employees above this block's content
   content: BlockContent
   created_at: string
 }

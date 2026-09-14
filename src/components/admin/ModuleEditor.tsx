@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Plus, Trash2, GripVertical, ChevronDown, ChevronUp,
   Type, Video, HelpCircle, Save, ArrowLeft, Eye, EyeOff, Folder, FolderOpen, Check, X,
-  Presentation, FileText, UserPlus,
+  Presentation, FileText, UserPlus, Archive, ArchiveRestore,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -60,6 +60,7 @@ function estimateMinutesFromContent(sections: SectionWithBlocks[]): number {
 
   let total = 0
   for (const section of sections) {
+    if (section.is_archived) continue
     for (const block of section.content_blocks) {
       if (block.type === 'text') {
         total += wordCount(stripHtml((block.content as TextContent).html ?? '')) / READING_WPM
@@ -94,6 +95,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
   const recommendedMinutes = useMemo(() => estimateMinutesFromContent(sections), [sections])
   const [saving, setSaving] = useState(false)
   const [assigningSectionId, setAssigningSectionId] = useState<string | null>(null)
+  const [archivedExpanded, setArchivedExpanded] = useState(false)
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(initialSections.map(s => s.id))
   )
@@ -178,6 +180,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
       group_id: groupId,
       title: `Training ${sections.length + 1}`,
       order_index: sections.length,
+      is_archived: false,
       created_at: new Date().toISOString(),
       content_blocks: [],
     }
@@ -211,7 +214,21 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
     setSections(prev => prev.map(s => s.id === id ? { ...s, group_id: groupId } : s))
   }
 
-  const removeSection = (id: string) => {
+  // Archiving hides a training from employees and progress/certificate
+  // calculations without deleting it — it stays in `sections` (so its
+  // content, completion history, and any assignments survive) and just
+  // moves into the "Archived" list below, restorable at any time.
+  const archiveSection = (id: string) => {
+    setSections(prev => prev.map(s => s.id === id ? { ...s, is_archived: true } : s))
+  }
+
+  const restoreSection = (id: string) => {
+    setSections(prev => prev.map(s => s.id === id ? { ...s, is_archived: false } : s))
+  }
+
+  // Only reachable from the Archived list — this is the actual, permanent
+  // delete (removes the row entirely on next save).
+  const deleteSectionPermanently = (id: string) => {
     setSections(prev => prev.filter(s => s.id !== id))
   }
 
@@ -220,7 +237,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
     setSections(prev => {
       const section = prev.find(s => s.id === id)
       if (!section) return prev
-      const siblings = prev.filter(s => (s.group_id ?? null) === (section.group_id ?? null))
+      const siblings = prev.filter(s => (s.group_id ?? null) === (section.group_id ?? null) && !s.is_archived)
       const siblingIdx = siblings.findIndex(s => s.id === id)
       const swapWith = direction === 'up' ? siblings[siblingIdx - 1] : siblings[siblingIdx + 1]
       if (!swapWith) return prev
@@ -245,6 +262,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
       section_id: sectionId,
       type,
       order_index: 0,
+      title: '',
       content: defaultContent[type] as any,
       created_at: new Date().toISOString(),
     }
@@ -262,6 +280,19 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
             ...s,
             content_blocks: s.content_blocks.map(b =>
               b.id === blockId ? { ...b, content } : b
+            )
+          }
+        : s
+    ))
+  }
+
+  const updateBlockTitle = (sectionId: string, blockId: string, title: string) => {
+    setSections(prev => prev.map(s =>
+      s.id === sectionId
+        ? {
+            ...s,
+            content_blocks: s.content_blocks.map(b =>
+              b.id === blockId ? { ...b, title } : b
             )
           }
         : s
@@ -308,33 +339,78 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
         moduleId = data.id
       }
 
-      // Delete all existing groups and sections and re-create (simplest approach for ordering)
-      if (existingModule?.id) {
-        await supabase.from('sections').delete().eq('module_id', moduleId!)
-        await supabase.from('groups').delete().eq('module_id', moduleId!)
+      // Upsert groups/sections/blocks by id instead of delete-everything-and-
+      // recreate — the old approach gave every section and content block a
+      // fresh id on every single save, which (via on-delete-cascade FKs)
+      // silently wiped employee completion progress, per-training
+      // assignments, and quiz attempt history each time a module was edited.
+      const initialGroupIds = new Set(initialGroups.map(g => g.id))
+      const currentGroupIds = new Set(groups.map(g => g.id))
+      const removedGroupIds = [...initialGroupIds].filter(id => !currentGroupIds.has(id))
+      if (removedGroupIds.length > 0) {
+        await supabase.from('groups').delete().in('id', removedGroupIds)
+      }
+
+      const initialSectionIds = new Set(initialSections.map(s => s.id))
+      const currentSectionIds = new Set(sections.map(s => s.id))
+      const removedSectionIds = [...initialSectionIds].filter(id => !currentSectionIds.has(id))
+      if (removedSectionIds.length > 0) {
+        // Cascades to that section's own content_blocks — those genuinely
+        // shouldn't survive a permanent delete.
+        await supabase.from('sections').delete().in('id', removedSectionIds)
       }
 
       const groupIdMap: Record<string, string> = {}
       for (let gi = 0; gi < groups.length; gi++) {
         const group = groups[gi]
-        const { data: groupData, error: groupError } = await supabase
-          .from('groups')
-          .insert({ module_id: moduleId, title: group.title, order_index: gi })
-          .select()
-          .single()
-        if (groupError) throw groupError
-        groupIdMap[group.id] = groupData.id
+        if (group.id.startsWith('temp_')) {
+          const { data: groupData, error } = await supabase
+            .from('groups')
+            .insert({ module_id: moduleId, title: group.title, order_index: gi })
+            .select()
+            .single()
+          if (error) throw error
+          groupIdMap[group.id] = groupData.id
+        } else {
+          const { error } = await supabase
+            .from('groups')
+            .update({ title: group.title, order_index: gi })
+            .eq('id', group.id)
+          if (error) throw error
+        }
       }
+
+      const initialSectionById = new Map(initialSections.map(s => [s.id, s]))
 
       for (let si = 0; si < sections.length; si++) {
         const section = sections[si]
-        const resolvedGroupId = section.group_id ? (groupIdMap[section.group_id] ?? null) : null
-        const { data: sectionData, error: sectionError } = await supabase
-          .from('sections')
-          .insert({ module_id: moduleId, group_id: resolvedGroupId, title: section.title, order_index: si })
-          .select()
-          .single()
-        if (sectionError) throw sectionError
+        const resolvedGroupId = section.group_id ? (groupIdMap[section.group_id] ?? section.group_id) : null
+        let sectionId: string
+
+        if (section.id.startsWith('temp_')) {
+          const { data: sectionData, error } = await supabase
+            .from('sections')
+            .insert({ module_id: moduleId, group_id: resolvedGroupId, title: section.title, order_index: si, is_archived: section.is_archived })
+            .select()
+            .single()
+          if (error) throw error
+          sectionId = sectionData.id
+        } else {
+          sectionId = section.id
+          const { error } = await supabase
+            .from('sections')
+            .update({ group_id: resolvedGroupId, title: section.title, order_index: si, is_archived: section.is_archived })
+            .eq('id', sectionId)
+          if (error) throw error
+        }
+
+        // Same upsert treatment for this section's content blocks.
+        const initialBlockIds = new Set((initialSectionById.get(section.id)?.content_blocks ?? []).map(b => b.id))
+        const currentBlockIds = new Set(section.content_blocks.map(b => b.id))
+        const removedBlockIds = [...initialBlockIds].filter(id => !currentBlockIds.has(id))
+        if (removedBlockIds.length > 0) {
+          await supabase.from('content_blocks').delete().in('id', removedBlockIds)
+        }
 
         for (let bi = 0; bi < section.content_blocks.length; bi++) {
           const block = section.content_blocks[bi]
@@ -347,10 +423,18 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
             content = { ...vc, youtube_id: ytId ?? '' }
           }
 
-          const { error: blockError } = await supabase
-            .from('content_blocks')
-            .insert({ section_id: sectionData.id, type: block.type, order_index: bi, content })
-          if (blockError) throw blockError
+          if (block.id.startsWith('temp_')) {
+            const { error } = await supabase
+              .from('content_blocks')
+              .insert({ section_id: sectionId, type: block.type, order_index: bi, title: block.title || null, content })
+            if (error) throw error
+          } else {
+            const { error } = await supabase
+              .from('content_blocks')
+              .update({ order_index: bi, title: block.title || null, content })
+              .eq('id', block.id)
+            if (error) throw error
+          }
         }
       }
 
@@ -450,10 +534,11 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
               <ChevronDown className="h-4 w-4" />
             </button>
             <button
-              onClick={e => { e.stopPropagation(); removeSection(section.id) }}
-              className="p-1 rounded text-slate-400 hover:text-red-600 ml-1"
+              onClick={e => { e.stopPropagation(); archiveSection(section.id) }}
+              title="Archive this training — hides it from employees, keeps its content and history, restorable anytime"
+              className="p-1 rounded text-slate-400 hover:text-amber-600 ml-1"
             >
-              <Trash2 className="h-4 w-4" />
+              <Archive className="h-4 w-4" />
             </button>
             {isExpanded
               ? <ChevronUp className="h-4 w-4 text-slate-400 ml-1" />
@@ -505,7 +590,19 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
                 </div>
 
                 {/* Block editor */}
-                <div className="p-4">
+                <div className="p-4 space-y-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Title shown to employees (optional)</Label>
+                    <Input
+                      value={block.title ?? ''}
+                      onChange={e => updateBlockTitle(section.id, block.id, e.target.value)}
+                      placeholder={
+                        block.type === 'document'
+                          ? 'e.g. Standard Office Training SOP'
+                          : `e.g. describe this ${blockTypeLabels[block.type].toLowerCase()} block...`
+                      }
+                    />
+                  </div>
                   {block.type === 'text' && (
                     <TextBlockEditor
                       content={block.content as any}
@@ -561,7 +658,8 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
     )
   }
 
-  const ungroupedSections = sections.filter(s => !s.group_id)
+  const ungroupedSections = sections.filter(s => !s.group_id && !s.is_archived)
+  const archivedSections = sections.filter(s => s.is_archived)
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -653,7 +751,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900">
-            Trainings <span className="text-slate-400 font-normal">({sections.length} training{sections.length !== 1 ? 's' : ''}{groups.length > 0 ? `, ${groups.length} group${groups.length !== 1 ? 's' : ''}` : ''})</span>
+            Trainings <span className="text-slate-400 font-normal">({sections.length - archivedSections.length} training{sections.length - archivedSections.length !== 1 ? 's' : ''}{groups.length > 0 ? `, ${groups.length} group${groups.length !== 1 ? 's' : ''}` : ''})</span>
           </h2>
           <div className="flex items-center gap-2">
             <Button onClick={() => addSection(null)}>
@@ -686,7 +784,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
         {/* Groups (collapsible folders) */}
         {groups.map((group, gi) => {
           const isExpanded = expandedGroups.has(group.id)
-          const groupSections = sections.filter(s => s.group_id === group.id)
+          const groupSections = sections.filter(s => s.group_id === group.id && !s.is_archived)
           return (
             <Card key={group.id} className="overflow-hidden">
               <div
@@ -748,6 +846,58 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
         {/* Ungrouped sections */}
         {ungroupedSections.map(s => renderSection(s, ungroupedSections))}
       </div>
+
+      {archivedSections.length > 0 && (
+        <Card>
+          <div
+            className="flex items-center gap-3 px-5 py-4 cursor-pointer hover:bg-slate-50 rounded-xl"
+            onClick={() => setArchivedExpanded(o => !o)}
+          >
+            <Archive className="h-5 w-5 text-slate-400 shrink-0" />
+            <p className="font-semibold text-slate-700 flex-1">
+              Archived Trainings ({archivedSections.length})
+            </p>
+            <span className="text-xs text-slate-400">
+              Hidden from employees — content and completion history are kept
+            </span>
+            {archivedExpanded
+              ? <ChevronUp className="h-4 w-4 text-slate-400" />
+              : <ChevronDown className="h-4 w-4 text-slate-400" />
+            }
+          </div>
+          {archivedExpanded && (
+            <div className="px-5 pb-5 space-y-2">
+              <Separator />
+              {archivedSections.map(section => (
+                <div
+                  key={section.id}
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg border border-slate-200 bg-slate-50"
+                >
+                  <p className="flex-1 min-w-0 truncate text-sm text-slate-600">{section.title || 'Untitled training'}</p>
+                  <span className="text-xs text-slate-400 shrink-0">
+                    {section.content_blocks.length} block{section.content_blocks.length !== 1 ? 's' : ''}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={() => restoreSection(section.id)}>
+                    <ArchiveRestore className="h-3.5 w-3.5 mr-1.5" /> Restore
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-500 border-red-200 hover:text-red-600 hover:bg-red-50"
+                    onClick={() => {
+                      if (confirm(`Permanently delete "${section.title || 'this training'}"? This can't be undone.`)) {
+                        deleteSectionPermanently(section.id)
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete Permanently
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       {(sections.length > 0 || groups.length > 0) && (
         <div className="flex justify-end pb-8">

@@ -55,6 +55,7 @@ export default async function TrainingModulePage({
     .from('sections')
     .select('*')
     .eq('module_id', moduleId)
+    .eq('is_archived', false)
     .order('order_index') as { data: Section[] | null }
 
   const sectionIds = (sections ?? []).map(s => s.id)

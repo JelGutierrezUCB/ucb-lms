@@ -103,20 +103,30 @@ export function DocumentBlockEditor({ content, onChange }: Props) {
 
       {source === 'link' ? (
         content.link_url ? (
-          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <Link2 className="h-6 w-6 text-slate-400 shrink-0" />
-            <p className="font-medium text-slate-900 text-sm flex-1 truncate">{content.file_name || content.link_url}</p>
-            <a
-              href={content.link_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-sm text-blue-700 hover:underline shrink-0"
-            >
-              <ExternalLink className="h-3.5 w-3.5" /> View
-            </a>
-            <Button type="button" variant="outline" size="sm" onClick={removeLink}>
-              <X className="h-3.5 w-3.5 mr-1" /> Remove
-            </Button>
+          <div className="space-y-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Label</Label>
+              <Input
+                value={content.file_name}
+                onChange={e => onChange({ ...content, file_name: e.target.value })}
+                placeholder="e.g. UCB Standard Office Training SOP"
+              />
+            </div>
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <Link2 className="h-6 w-6 text-slate-400 shrink-0" />
+              <p className="text-slate-500 text-sm flex-1 truncate">{content.link_url}</p>
+              <a
+                href={content.link_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-sm text-blue-700 hover:underline shrink-0"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> View
+              </a>
+              <Button type="button" variant="outline" size="sm" onClick={removeLink}>
+                <X className="h-3.5 w-3.5 mr-1" /> Remove
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="space-y-2">

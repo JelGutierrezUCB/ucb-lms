@@ -103,16 +103,18 @@ export default async function TrainingPage({
   // Required (auto-assigned-to-everyone) modules always pin to the top
   modules = [...modules].sort((a, b) => Number(b.auto_assign_all) - Number(a.auto_assign_all))
 
-  // Get progress for effective user
+  // Get progress for effective user (archived trainings don't count)
   const { data: sectionCounts } = await supabase
     .from('sections')
     .select('module_id, id')
     .in('module_id', modules.length ? modules.map(m => m.id) : [''])
+    .eq('is_archived', false)
 
   const { data: completedSections } = await supabase
     .from('section_progress')
-    .select('section_id, sections!inner(module_id)')
+    .select('section_id, sections!inner(module_id, is_archived)')
     .eq('user_id', effectiveUserId)
+    .eq('sections.is_archived', false)
 
   // A module's required set is null/absent (whole module or admin preview,
   // no restriction) or a specific Set of section ids (partial assignment).

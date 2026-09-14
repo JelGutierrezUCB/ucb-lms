@@ -41,11 +41,13 @@ export default async function DashboardPage() {
     .from('sections')
     .select('module_id, id')
     .in('module_id', moduleIds.length ? moduleIds : [''])
+    .eq('is_archived', false)
 
   const { data: completedSections } = await supabase
     .from('section_progress')
-    .select('section_id, sections!inner(module_id)')
+    .select('section_id, sections!inner(module_id, is_archived)')
     .eq('user_id', user.id)
+    .eq('sections.is_archived', false)
 
   // Per module: null = whole module required; a Set = only these specific
   // sections are required (assigned individually).

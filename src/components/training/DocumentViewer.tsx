@@ -144,15 +144,16 @@ export function DocumentViewer({ blockId, content }: Props) {
           {/* Fragment params tell the browser's built-in PDF viewer to fit the
               page to the frame's width and hide its toolbar/thumbnail sidebar —
               without this it defaults to a small zoom that needs scrolling.
-              sandbox (without allow-top-navigation) stops a known Chrome PDF
-              viewer quirk where clicking a link inside a cross-origin framed
-              PDF navigates the WHOLE training portal tab instead of just the
-              frame — allow-popups keeps normal "opens a new tab" working. */}
+              NOTE: sandboxing this iframe (tried, to stop a link-inside-the-PDF
+              from hijacking the top-level tab) makes Chrome's built-in PDF
+              viewer refuse to render at all — worse than the problem it fixed,
+              so this stays unsandboxed. A link click inside a PDF can still
+              navigate the whole portal tab; there's no reliable in-app fix for
+              that without dropping Chrome's native viewer entirely. */}
           <iframe
             src={`${url}#toolbar=0&navpanes=0&view=FitH`}
             className="w-full h-full"
             title={content.file_name}
-            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
           />
         </div>
       )}
@@ -179,11 +180,13 @@ export function DocumentViewer({ blockId, content }: Props) {
 
       {isOffice && !html && (
         <div className="rounded-xl overflow-hidden border border-slate-200" style={{ height: '70vh' }}>
+          {/* Same reasoning as the PDF viewer above — not sandboxed, since
+              Microsoft's viewer is complex enough that sandboxing risks
+              breaking it entirely rather than just constraining navigation. */}
           <iframe
             src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`}
             className="w-full h-full"
             title={content.file_name}
-            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
           />
           <p className="text-xs text-slate-400 text-center py-1.5 bg-slate-50 border-t border-slate-200">
             Viewed via Microsoft Office Online — use Open above if this doesn't load

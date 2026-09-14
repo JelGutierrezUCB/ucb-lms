@@ -222,6 +222,9 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
             {/* Content blocks */}
             {currentSection.content_blocks.map((block) => (
               <div key={block.id}>
+                {block.title && (
+                  <h3 className="text-base font-semibold text-slate-800 mb-2">{block.title}</h3>
+                )}
                 {block.type === 'text' && <TextViewer content={block.content as any} />}
                 {block.type === 'video' && <VideoViewer content={block.content as any} />}
                 {block.type === 'slides' && <SlideViewer content={block.content as any} />}
