@@ -80,8 +80,9 @@ export interface SlidesContent {
 // bucket; access is via a short-lived signed URL, never a direct public link.
 export interface DocumentContent {
   storage_path: string
-  file_name: string
+  file_name: string // also doubles as the display label when link_url is set
   mime_type?: string
+  link_url?: string // external URL (e.g. an SOP hosted on the company's own system) instead of an uploaded file
 }
 
 export type VideoSource = 'youtube' | 'upload'

@@ -2,9 +2,11 @@
 
 import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Loader2, Upload, FileText, X, ExternalLink } from 'lucide-react'
+import { Loader2, Upload, FileText, X, ExternalLink, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import type { DocumentContent } from '@/types'
@@ -14,8 +16,11 @@ interface Props {
   onChange: (content: DocumentContent) => void
 }
 
+type Source = 'upload' | 'link'
+
 export function DocumentBlockEditor({ content, onChange }: Props) {
   const [uploading, setUploading] = useState(false)
+  const [source, setSource] = useState<Source>(content.link_url ? 'link' : 'upload')
   const supabase = createClient()
 
   const onDrop = useCallback(async (accepted: File[]) => {
@@ -50,6 +55,10 @@ export function DocumentBlockEditor({ content, onChange }: Props) {
     onChange({ storage_path: '', file_name: '' })
   }
 
+  const removeLink = () => {
+    onChange({ storage_path: '', file_name: '', link_url: undefined })
+  }
+
   const viewFile = async () => {
     if (!content.storage_path) return
     const { data, error } = await supabase.storage
@@ -59,9 +68,80 @@ export function DocumentBlockEditor({ content, onChange }: Props) {
     window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
   }
 
+  const setSourceMode = (next: Source) => {
+    setSource(next)
+    // Clear whichever mode's data isn't active, so switching back and forth
+    // doesn't end up saving both a file and a link on the same block.
+    if (next === 'link' && content.storage_path) onChange({ storage_path: '', file_name: '', link_url: content.link_url })
+    if (next === 'upload' && content.link_url) onChange({ storage_path: content.storage_path, file_name: content.file_name, link_url: undefined })
+  }
+
   return (
-    <div className="space-y-1.5">
-      {content.storage_path ? (
+    <div className="space-y-3">
+      <div className="flex gap-2 rounded-lg bg-slate-100 p-1 w-fit">
+        <button
+          type="button"
+          onClick={() => setSourceMode('upload')}
+          className={cn(
+            'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+            source === 'upload' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'
+          )}
+        >
+          <Upload className="h-4 w-4" /> Upload File
+        </button>
+        <button
+          type="button"
+          onClick={() => setSourceMode('link')}
+          className={cn(
+            'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+            source === 'link' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'
+          )}
+        >
+          <Link2 className="h-4 w-4" /> Link to URL
+        </button>
+      </div>
+
+      {source === 'link' ? (
+        content.link_url ? (
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <Link2 className="h-6 w-6 text-slate-400 shrink-0" />
+            <p className="font-medium text-slate-900 text-sm flex-1 truncate">{content.file_name || content.link_url}</p>
+            <a
+              href={content.link_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-sm text-blue-700 hover:underline shrink-0"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> View
+            </a>
+            <Button type="button" variant="outline" size="sm" onClick={removeLink}>
+              <X className="h-3.5 w-3.5 mr-1" /> Remove
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Label</Label>
+              <Input
+                value={content.file_name}
+                onChange={e => onChange({ ...content, file_name: e.target.value })}
+                placeholder="e.g. UCB Standard Office Training SOP"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">URL</Label>
+              <Input
+                value={content.link_url ?? ''}
+                onChange={e => onChange({ ...content, link_url: e.target.value })}
+                placeholder="https://..."
+              />
+            </div>
+            <p className="text-xs text-slate-400">
+              For an SOP or file already hosted in your own system — employees get a link, not a copy of the file.
+            </p>
+          </div>
+        )
+      ) : content.storage_path ? (
         <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
           <FileText className="h-6 w-6 text-slate-400 shrink-0" />
           <p className="font-medium text-slate-900 text-sm flex-1 truncate">{content.file_name}</p>

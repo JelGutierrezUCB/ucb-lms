@@ -37,6 +37,8 @@ export function DocumentViewer({ blockId, content }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (content.link_url) { setLoading(false); return } // external link — nothing to fetch
+
     let cancelled = false
     setLoading(true)
     setError(null)
@@ -67,12 +69,29 @@ export function DocumentViewer({ blockId, content }: Props) {
       .catch(() => { if (!cancelled) setError('Failed to load document') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [blockId, content.file_name])
+  }, [blockId, content.file_name, content.link_url])
 
-  if (!content?.storage_path) {
+  if (!content?.storage_path && !content?.link_url) {
     return (
       <div className="rounded-xl bg-slate-100 p-8 text-center text-slate-400">
         No document attached
+      </div>
+    )
+  }
+
+  if (content.link_url) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <FileText className="h-6 w-6 text-slate-400 shrink-0" />
+        <p className="font-medium text-slate-900 text-sm flex-1 truncate">{content.file_name || content.link_url}</p>
+        <a
+          href={content.link_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-sm text-blue-700 hover:underline shrink-0"
+        >
+          <ExternalLink className="h-4 w-4" /> Open
+        </a>
       </div>
     )
   }
@@ -124,8 +143,17 @@ export function DocumentViewer({ blockId, content }: Props) {
         <div className="rounded-xl overflow-hidden border border-slate-200" style={{ height: '85vh' }}>
           {/* Fragment params tell the browser's built-in PDF viewer to fit the
               page to the frame's width and hide its toolbar/thumbnail sidebar —
-              without this it defaults to a small zoom that needs scrolling. */}
-          <iframe src={`${url}#toolbar=0&navpanes=0&view=FitH`} className="w-full h-full" title={content.file_name} />
+              without this it defaults to a small zoom that needs scrolling.
+              sandbox (without allow-top-navigation) stops a known Chrome PDF
+              viewer quirk where clicking a link inside a cross-origin framed
+              PDF navigates the WHOLE training portal tab instead of just the
+              frame — allow-popups keeps normal "opens a new tab" working. */}
+          <iframe
+            src={`${url}#toolbar=0&navpanes=0&view=FitH`}
+            className="w-full h-full"
+            title={content.file_name}
+            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
+          />
         </div>
       )}
 
@@ -155,6 +183,7 @@ export function DocumentViewer({ blockId, content }: Props) {
             src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`}
             className="w-full h-full"
             title={content.file_name}
+            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
           />
           <p className="text-xs text-slate-400 text-center py-1.5 bg-slate-50 border-t border-slate-200">
             Viewed via Microsoft Office Online — use Open above if this doesn't load
