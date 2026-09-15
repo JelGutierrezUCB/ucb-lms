@@ -11,8 +11,6 @@ import {
   UserCheck,
   GraduationCap,
   BarChart3,
-  Target,
-  Award,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
@@ -38,12 +36,6 @@ const navItems: NavItem[] = [
     roles: ['admin', 'manager', 'employee'],
   },
   {
-    href: '/score-summary',
-    label: 'Score Summary',
-    icon: <Target className="h-5 w-5" />,
-    roles: ['admin', 'manager', 'employee'],
-  },
-  {
     href: '/admin/users',
     label: 'Users',
     icon: <Users className="h-5 w-5" />,
@@ -65,12 +57,6 @@ const navItems: NavItem[] = [
     href: '/reports',
     label: 'Reports',
     icon: <BarChart3 className="h-5 w-5" />,
-    roles: ['admin', 'manager'],
-  },
-  {
-    href: '/certificates',
-    label: 'Certificates',
-    icon: <Award className="h-5 w-5" />,
     roles: ['admin', 'manager'],
   },
   {

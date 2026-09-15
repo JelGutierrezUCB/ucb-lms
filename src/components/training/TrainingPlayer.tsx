@@ -87,6 +87,11 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
 
     if (isLastSection) {
       toast.success('Training complete! Great job!')
+      fetch('/api/notifications/completion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: activeUserId, moduleId: module.id }),
+      }).catch(() => {})
     } else {
       goNext()
     }
@@ -253,25 +258,38 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
               <h1 className="text-2xl font-bold text-slate-900">{currentSection.title}</h1>
             </div>
 
-            {/* Content blocks */}
-            {currentSection.content_blocks.map((block) => (
-              <div key={block.id}>
-                {block.title && (
-                  <h3 className="text-base font-semibold text-slate-800 mb-2">{block.title}</h3>
-                )}
-                {block.type === 'text' && <TextViewer content={block.content as any} />}
-                {block.type === 'video' && <VideoViewer content={block.content as any} />}
-                {block.type === 'slides' && <SlideViewer content={block.content as any} />}
-                {block.type === 'document' && <DocumentViewer blockId={block.id} content={block.content as any} />}
-                {block.type === 'quiz' && (
-                  <QuizViewer
-                    block={block}
-                    userId={activeUserId}
-                    onPass={() => setQuizPassed(prev => new Set([...prev, block.id]))}
-                  />
-                )}
-              </div>
-            ))}
+            {/* Content blocks — once a section is already completed, its
+                quiz is hidden (no re-taking), but everything else stays
+                visible so it's still usable as reference material. */}
+            {currentSection.content_blocks.map((block) => {
+              const isSectionDone = completedSections.has(currentSection.id)
+              if (block.type === 'quiz' && isSectionDone) {
+                return (
+                  <div key={block.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex items-center gap-2 text-sm text-slate-500">
+                    <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
+                    Quiz already completed — hidden here so you can use this training as reference only.
+                  </div>
+                )
+              }
+              return (
+                <div key={block.id}>
+                  {block.title && (
+                    <h3 className="text-base font-semibold text-slate-800 mb-2">{block.title}</h3>
+                  )}
+                  {block.type === 'text' && <TextViewer content={block.content as any} />}
+                  {block.type === 'video' && <VideoViewer content={block.content as any} />}
+                  {block.type === 'slides' && <SlideViewer content={block.content as any} />}
+                  {block.type === 'document' && <DocumentViewer blockId={block.id} content={block.content as any} />}
+                  {block.type === 'quiz' && (
+                    <QuizViewer
+                      block={block}
+                      userId={activeUserId}
+                      onPass={() => setQuizPassed(prev => new Set([...prev, block.id]))}
+                    />
+                  )}
+                </div>
+              )
+            })}
 
             {/* Navigation */}
             <div className="flex items-center justify-between pt-6 border-t border-slate-200">

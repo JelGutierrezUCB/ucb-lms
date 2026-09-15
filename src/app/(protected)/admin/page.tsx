@@ -4,11 +4,13 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Users, BookOpen, GraduationCap, TrendingUp, AlertCircle, CheckCircle2, Clock } from 'lucide-react'
+import { Users, BookOpen, GraduationCap, TrendingUp, AlertCircle, CheckCircle2, Clock, Target, Award, Download, GraduationCap as PortalIcon } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ModuleCompletionList } from '@/components/admin/ModuleCompletionList'
 import { AdminActionButtons } from '@/components/admin/AdminActionButtons'
+import { formatDate } from '@/lib/utils'
+import type { Certificate } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,8 +19,24 @@ export default async function AdminDashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
+
+  // The admin's own score/certificates — admins can be assigned trainings
+  // too (e.g. required-for-everyone modules), so this isn't always empty.
+  const { data: myQuizAttempts } = await supabase
+    .from('quiz_attempts')
+    .select('score, max_score')
+    .eq('user_id', user.id)
+  const myScoredAttempts = (myQuizAttempts ?? []).filter(a => a.max_score > 0)
+  const myAvgScore = myScoredAttempts.length > 0
+    ? Math.round(myScoredAttempts.reduce((s, a) => s + (a.score / a.max_score) * 100, 0) / myScoredAttempts.length)
+    : null
+  const { data: myCertificates } = await supabase
+    .from('certificates')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('issued_at', { ascending: false }) as { data: Certificate[] | null }
 
   const [
     { data: allProfiles },
@@ -168,6 +186,18 @@ export default async function AdminDashboardPage() {
       <Header title="Admin Dashboard" />
       <main className="flex-1 p-6 space-y-6">
 
+        {/* Welcome banner */}
+        <div className="rounded-2xl bg-gradient-to-r from-[#241B4E] to-[#3a2d7a] p-6 text-white flex items-center gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/10">
+            <PortalIcon className="h-8 w-8 text-[#7CC24A]" />
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-widest text-[#7CC24A] font-semibold">UCB Training Portal</p>
+            <h2 className="text-xl font-bold">Welcome back, {profile.full_name?.split(' ')[0] ?? 'Admin'}!</h2>
+            <p className="text-sm text-white/70 mt-0.5">Here's how training is going across the org.</p>
+          </div>
+        </div>
+
         {/* Top stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
@@ -288,6 +318,69 @@ export default async function AdminDashboardPage() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Your own score/certificates — only shown once you actually have some,
+            so this doesn't clutter the dashboard for admins who don't personally
+            take trainings */}
+        {((myQuizAttempts?.length ?? 0) > 0 || (myCertificates?.length ?? 0) > 0) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-3">
+                <CardTitle>My Score Summary</CardTitle>
+                <Link href="/score-summary" className="text-sm text-blue-600 hover:underline">View full history</Link>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-xl border border-slate-200 p-3 text-center">
+                    <Target className="h-4 w-4 text-blue-600 mx-auto mb-1" />
+                    <p className="text-lg font-bold text-slate-900">{myAvgScore !== null ? `${myAvgScore}%` : '—'}</p>
+                    <p className="text-xs text-slate-500">Avg Score</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 p-3 text-center">
+                    <Award className="h-4 w-4 text-green-600 mx-auto mb-1" />
+                    <p className="text-lg font-bold text-slate-900">{myCertificates?.length ?? 0}</p>
+                    <p className="text-xs text-slate-500">Certificates</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 p-3 text-center">
+                    <TrendingUp className="h-4 w-4 text-amber-600 mx-auto mb-1" />
+                    <p className="text-lg font-bold text-slate-900">{myQuizAttempts?.length ?? 0}</p>
+                    <p className="text-xs text-slate-500">Attempts</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle>My Certificates</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!myCertificates || myCertificates.length === 0 ? (
+                  <p className="text-slate-400 text-sm text-center py-4">No certificates yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {myCertificates.slice(0, 4).map(cert => (
+                      <div key={cert.id} className="flex items-center gap-3 rounded-lg border border-slate-200 p-2.5">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-slate-900 text-sm truncate">{cert.module_title}</p>
+                          <p className="text-xs text-slate-400">Issued {formatDate(cert.issued_at)}</p>
+                        </div>
+                        <a
+                          href={`/api/certificate?certificateId=${cert.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-sm text-blue-600 hover:underline shrink-0"
+                        >
+                          <Download className="h-3.5 w-3.5" /> Download
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Quick actions */}
