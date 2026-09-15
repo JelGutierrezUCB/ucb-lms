@@ -141,7 +141,7 @@ export default async function DashboardPage() {
           <div className="border-l border-white/20 pl-6">
             <p className="text-xs uppercase tracking-widest text-[#7CC24A] font-semibold">UCB Training Portal</p>
             <h2 className="text-xl font-bold">Welcome back, {profile.full_name.split(' ')[0]}!</h2>
-            <p className="text-sm text-white/70 mt-0.5">Keep up the great work on your training.</p>
+            <p className="text-sm text-white/70 mt-0.5">You're crushing it — keep that training streak alive! 🌱</p>
           </div>
         </div>
 

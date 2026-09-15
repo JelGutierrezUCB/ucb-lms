@@ -198,7 +198,7 @@ export default async function AdminDashboardPage() {
           <div className="border-l border-white/20 pl-6">
             <p className="text-xs uppercase tracking-widest text-[#7CC24A] font-semibold">UCB Training Portal</p>
             <h2 className="text-xl font-bold">Welcome back, {profile.full_name?.split(' ')[0] ?? 'Admin'}!</h2>
-            <p className="text-sm text-white/70 mt-0.5">Here's how training is going across the org.</p>
+            <p className="text-sm text-white/70 mt-0.5">Growing greener, one completed training at a time. 🌱</p>
           </div>
         </div>
 
