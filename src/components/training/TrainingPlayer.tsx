@@ -209,7 +209,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
       {/* Main content */}
       <div className="flex-1 overflow-y-auto">
         {isAllComplete ? (
-          <div className="flex flex-col items-center justify-center min-h-full p-12 text-center">
+          <div className="flex flex-col items-center min-h-full p-12 text-center">
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100 mb-6">
               <Trophy className="h-10 w-10 text-green-600" />
             </div>
@@ -217,14 +217,25 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
             <p className="text-slate-500 mb-6">
               You've completed all {totalSections} sections of <strong>{module.title}</strong>. Congratulations!
             </p>
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setCurrentSectionIndex(0)}>Review from Start</Button>
+            <div className="flex gap-3 mb-8">
               <a href={`/api/certificate?userId=${activeUserId}&moduleId=${module.id}`} target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" className="gap-1.5">
+                <Button className="gap-1.5 bg-green-700 hover:bg-green-800">
                   <Award className="h-4 w-4" /> Download Certificate
                 </Button>
               </a>
-              <Button onClick={() => router.push('/training')}>Back to Catalog</Button>
+              <Button variant="outline" onClick={() => setCurrentSectionIndex(0)}>Review from Start</Button>
+              <Button variant="outline" onClick={() => router.push('/training')}>Back to Catalog</Button>
+            </div>
+
+            {/* Shown immediately so the certificate doesn't depend on the
+                employee remembering to click Download — same-origin API
+                route, so no cross-origin iframe quirks to work around. */}
+            <div className="w-full max-w-3xl rounded-xl overflow-hidden border border-slate-200 shadow-sm" style={{ height: '55vh' }}>
+              <iframe
+                src={`/api/certificate?userId=${activeUserId}&moduleId=${module.id}#toolbar=0&navpanes=0&view=FitH`}
+                className="w-full h-full"
+                title="Your certificate of completion"
+              />
             </div>
           </div>
         ) : (

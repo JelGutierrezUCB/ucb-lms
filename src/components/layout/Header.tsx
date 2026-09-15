@@ -1,7 +1,8 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { LogOut, ChevronDown } from 'lucide-react'
+import Link from 'next/link'
+import { LogOut, ChevronDown, UserCog } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProxy } from '@/contexts/ProxyContext'
 import {
@@ -53,8 +54,12 @@ export function Header({ title }: { title?: string }) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-slate-100 transition-colors">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-700 text-white text-sm font-bold">
-                {profile?.full_name.charAt(0).toUpperCase()}
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-700 text-white text-sm font-bold overflow-hidden shrink-0">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt={profile.full_name} className="h-full w-full object-cover" />
+                ) : (
+                  profile?.full_name.charAt(0).toUpperCase()
+                )}
               </div>
               <div className="text-left hidden sm:block">
                 <p className="text-sm font-medium text-slate-900">{profile?.full_name}</p>
@@ -65,6 +70,13 @@ export function Header({ title }: { title?: string }) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel>{profile?.email}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/profile" className="flex items-center cursor-pointer">
+                <UserCog className="h-4 w-4 mr-2" />
+                Profile Settings
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600 focus:bg-red-50">
               <LogOut className="h-4 w-4 mr-2" />

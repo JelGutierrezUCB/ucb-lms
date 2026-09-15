@@ -10,6 +10,7 @@ create table profiles (
   manager_id uuid references profiles(id),
   department text,
   company text,
+  avatar_url text,
   is_active boolean default true,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
@@ -400,4 +401,23 @@ create policy "training_source_docs_insert" on storage.objects for insert with c
 create policy "training_source_docs_delete" on storage.objects for delete using (
   bucket_id = 'training-source-docs' and
   exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+);
+
+-- Public bucket for profile photos, one folder per user (<user_id>/<file>) —
+-- RLS lets everyone read, but only write inside their own folder.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', true, 5242880, array['image/png','image/jpeg','image/webp','image/gif'])
+on conflict (id) do update set file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+create policy "avatars_select" on storage.objects for select using (
+  bucket_id = 'avatars'
+);
+create policy "avatars_insert" on storage.objects for insert with check (
+  bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text
+);
+create policy "avatars_update" on storage.objects for update using (
+  bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text
+);
+create policy "avatars_delete" on storage.objects for delete using (
+  bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text
 );

@@ -8,6 +8,7 @@ export interface Profile {
   manager_id: string | null
   department: string | null
   company: string | null
+  avatar_url?: string | null
   is_active: boolean
   created_at: string
   updated_at: string
