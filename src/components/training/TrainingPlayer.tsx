@@ -39,6 +39,11 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
   const [quizPassed, setQuizPassed] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(true)
+  // Once every section is done we default to the completion/certificate
+  // screen, but the learner can still step back into any section as
+  // reference material — reviewMode is what lets that coexist with the
+  // "all complete" state instead of the completion screen winning every time.
+  const [reviewMode, setReviewMode] = useState(false)
   const { effectiveUserId } = useProxy()
   const supabase = createClient()
   const router = useRouter()
@@ -188,8 +193,12 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
               <button
                 key={section.id}
                 onClick={() => {
-                  if (accessible) setCurrentSectionIndex(i)
-                  else toast.error('Complete the current training (and pass its quiz, if any) to unlock this one.')
+                  if (accessible) {
+                    setCurrentSectionIndex(i)
+                    if (isAllComplete) setReviewMode(true)
+                  } else {
+                    toast.error('Complete the current training (and pass its quiz, if any) to unlock this one.')
+                  }
                 }}
                 className={cn(
                   'w-full text-left flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors',
@@ -213,7 +222,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
 
       {/* Main content */}
       <div className="flex-1 overflow-y-auto">
-        {isAllComplete ? (
+        {isAllComplete && !reviewMode ? (
           <div className="flex flex-col items-center min-h-full p-12 text-center">
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100 mb-6">
               <Trophy className="h-10 w-10 text-green-600" />
@@ -228,7 +237,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
                   <Award className="h-4 w-4" /> Download Certificate
                 </Button>
               </a>
-              <Button variant="outline" onClick={() => setCurrentSectionIndex(0)}>Review from Start</Button>
+              <Button variant="outline" onClick={() => { setCurrentSectionIndex(0); setReviewMode(true) }}>Review from Start</Button>
               <Button variant="outline" onClick={() => router.push('/training')}>Back to Catalog</Button>
             </div>
 
@@ -247,12 +256,22 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
           <div className="max-w-3xl mx-auto p-8 space-y-6">
             {/* Section header */}
             <div>
-              <div className="flex items-center gap-2 text-sm text-slate-400 mb-2">
-                <span>Section {currentSectionIndex + 1} of {totalSections}</span>
-                {completedSections.has(currentSection.id) && (
-                  <Badge variant="success" className="flex items-center gap-1">
-                    <CheckCircle className="h-3 w-3" /> Completed
-                  </Badge>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <span>Section {currentSectionIndex + 1} of {totalSections}</span>
+                  {completedSections.has(currentSection.id) && (
+                    <Badge variant="success" className="flex items-center gap-1">
+                      <CheckCircle className="h-3 w-3" /> Completed
+                    </Badge>
+                  )}
+                </div>
+                {isAllComplete && reviewMode && (
+                  <button
+                    onClick={() => setReviewMode(false)}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                  >
+                    <Trophy className="h-3.5 w-3.5" /> Back to certificate
+                  </button>
                 )}
               </div>
               <h1 className="text-2xl font-bold text-slate-900">{currentSection.title}</h1>
@@ -298,12 +317,18 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
               </Button>
 
               <Button
-                onClick={markSectionComplete}
+                onClick={
+                  isAllComplete && reviewMode && isLastSection
+                    ? () => setReviewMode(false)
+                    : markSectionComplete
+                }
                 loading={saving}
                 disabled={!canComplete && !completedSections.has(currentSection.id)}
                 className={completedSections.has(currentSection.id) ? 'bg-green-600 hover:bg-green-700' : ''}
               >
-                {completedSections.has(currentSection.id)
+                {isAllComplete && reviewMode && isLastSection
+                  ? 'Back to Certificate'
+                  : completedSections.has(currentSection.id)
                   ? isLastSection ? 'Completed ✓' : 'Next Section'
                   : isLastSection ? 'Complete Training' : 'Mark Complete & Continue'
                 }
