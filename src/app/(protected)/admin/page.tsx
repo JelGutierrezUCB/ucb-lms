@@ -186,17 +186,19 @@ export default async function AdminDashboardPage() {
       <Header title="Admin Dashboard" />
       <main className="flex-1 p-6 space-y-6">
 
-        {/* Welcome banner — white so the logo (opaque white background) sits naturally */}
-        <div className="rounded-2xl bg-white border border-slate-200 p-6 flex flex-col items-center text-center gap-4">
-          <img
-            src="/branding/ucb-family-of-logos.png"
-            alt="UCB — a family of companies"
-            className="h-20 sm:h-24 w-auto"
-          />
-          <div className="border-t border-slate-200 pt-4 w-full max-w-md">
-            <p className="text-xs uppercase tracking-widest text-green-600 font-semibold">UCB Training Portal</p>
-            <h2 className="text-xl font-bold text-[#241B4E]">Welcome back, {profile.full_name?.split(' ')[0] ?? 'Admin'}!</h2>
-            <p className="text-sm text-slate-500 mt-0.5">Here's how training is going across the org.</p>
+        {/* Welcome banner */}
+        <div className="rounded-2xl bg-gradient-to-r from-[#241B4E] to-[#3a2d7a] p-6 text-white flex items-center gap-6">
+          <div className="bg-white rounded-xl p-3 shrink-0">
+            <img
+              src="/branding/ucb-environmental-logo.png"
+              alt="UCB Environmental"
+              className="h-12 w-auto"
+            />
+          </div>
+          <div className="border-l border-white/20 pl-6">
+            <p className="text-xs uppercase tracking-widest text-[#7CC24A] font-semibold">UCB Training Portal</p>
+            <h2 className="text-xl font-bold">Welcome back, {profile.full_name?.split(' ')[0] ?? 'Admin'}!</h2>
+            <p className="text-sm text-white/70 mt-0.5">Here's how training is going across the org.</p>
           </div>
         </div>
 
