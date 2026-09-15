@@ -9,23 +9,26 @@ async function generateCertificatePdf(opts: {
   moduleTitle: string
   date: string
   scoreLine?: string
+  certificateId?: string
 }) {
   const doc = await PDFDocument.create()
   const page = doc.addPage([792, 612]) // landscape letter
   const { width, height } = page.getSize()
   const bold = await doc.embedFont(StandardFonts.HelveticaBold)
   const regular = await doc.embedFont(StandardFonts.Helvetica)
-  const navy = rgb(0.12, 0.25, 0.68)
+  // UCB brand palette (green + navy), used across all four UCB companies.
+  const navy = rgb(0.141, 0.106, 0.306) // ~#241B4E
+  const green = rgb(0.298, 0.604, 0.165) // ~#4C9A2A
   const gray = rgb(0.45, 0.45, 0.45)
   const ink = rgb(0.1, 0.1, 0.12)
 
   page.drawRectangle({
     x: 24, y: 24, width: width - 48, height: height - 48,
-    borderColor: navy, borderWidth: 3,
+    borderColor: navy, borderWidth: 4,
   })
   page.drawRectangle({
-    x: 34, y: 34, width: width - 68, height: height - 68,
-    borderColor: navy, borderWidth: 0.75,
+    x: 36, y: 36, width: width - 72, height: height - 72,
+    borderColor: green, borderWidth: 1.5,
   })
 
   const centered = (text: string, y: number, font = regular, size = 14, color = ink) => {
@@ -33,16 +36,25 @@ async function generateCertificatePdf(opts: {
     page.drawText(text, { x: (width - w) / 2, y, size, font, color })
   }
 
-  centered(opts.company ? opts.company : 'UCB Training Portal', height - 90, bold, 16, navy)
-  centered('Certificate of Completion', height - 130, bold, 30, navy)
+  centered(opts.company || 'UCB Training Portal', height - 90, bold, 16, green)
+  centered('Certificate of Completion', height - 130, bold, 32, navy)
+  page.drawLine({
+    start: { x: width / 2 - 60, y: height - 148 }, end: { x: width / 2 + 60, y: height - 148 },
+    thickness: 2, color: green,
+  })
   centered('This certifies that', height - 190, regular, 14, gray)
   centered(opts.employeeName, height - 235, bold, 26, ink)
   centered('has successfully completed', height - 275, regular, 14, gray)
-  centered(opts.moduleTitle, height - 315, bold, 20, ink)
+  centered(opts.moduleTitle, height - 315, bold, 20, navy)
   if (opts.scoreLine) centered(opts.scoreLine, height - 350, regular, 12, gray)
   centered(`Completed on ${opts.date}`, height - 380, regular, 12, gray)
-  centered('Congratulations on completing your training!', height - 420, bold, 13, navy)
+  centered('Congratulations on completing your training!', height - 420, bold, 13, green)
   centered('UCB Training Portal', 55, regular, 10, gray)
+  if (opts.certificateId) {
+    page.drawText(`Certificate ID: ${opts.certificateId.slice(0, 8).toUpperCase()}`, {
+      x: width - 190, y: 40, size: 8, font: regular, color: gray,
+    })
+  }
 
   return doc.save()
 }
@@ -80,6 +92,7 @@ export async function GET(req: NextRequest) {
       moduleTitle: cert.module_title,
       date: formatDate(cert.completed_at),
       scoreLine,
+      certificateId: cert.id,
     })
     return new NextResponse(Buffer.from(pdf), {
       headers: {
@@ -127,6 +140,7 @@ export async function GET(req: NextRequest) {
       moduleTitle: issued.module_title,
       date: formatDate(issued.completed_at),
       scoreLine,
+      certificateId: issued.id,
     })
     return new NextResponse(Buffer.from(pdf), {
       headers: {

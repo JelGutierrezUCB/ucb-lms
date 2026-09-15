@@ -4,10 +4,10 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { BookOpen, CheckCircle, Clock, TrendingUp, Star } from 'lucide-react'
+import { BookOpen, CheckCircle, Clock, TrendingUp, Star, Target, Award, GraduationCap, Download } from 'lucide-react'
 import Link from 'next/link'
 import { cn, getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
-import type { Profile, Module, Assignment } from '@/types'
+import type { Profile, Module, Assignment, Certificate } from '@/types'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -107,11 +107,40 @@ export default async function DashboardPage() {
   const inProgressCount = assignmentsWithProgress.filter(a => a.percent > 0 && a.percent < 100).length
   const notStartedCount = assignmentsWithProgress.filter(a => a.percent === 0).length
 
+  // Score summary (condensed — full history lives at /score-summary)
+  const { data: quizAttempts } = await supabase
+    .from('quiz_attempts')
+    .select('score, max_score')
+    .eq('user_id', user.id)
+  const scoredAttempts = (quizAttempts ?? []).filter(a => a.max_score > 0)
+  const avgScore = scoredAttempts.length > 0
+    ? Math.round(scoredAttempts.reduce((s, a) => s + (a.score / a.max_score) * 100, 0) / scoredAttempts.length)
+    : null
+
+  // My certificates
+  const { data: myCertificates } = await supabase
+    .from('certificates')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('issued_at', { ascending: false }) as { data: Certificate[] | null }
+
   return (
     <div className="flex flex-col flex-1 overflow-auto">
       <Header title={`Welcome back, ${profile.full_name.split(' ')[0]}`} />
 
       <main className="flex-1 p-6 space-y-6">
+        {/* Welcome banner */}
+        <div className="rounded-2xl bg-gradient-to-r from-[#241B4E] to-[#3a2d7a] p-6 text-white flex items-center gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/10">
+            <GraduationCap className="h-8 w-8 text-[#7CC24A]" />
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-widest text-[#7CC24A] font-semibold">UCB Training Portal</p>
+            <h2 className="text-xl font-bold">Welcome back, {profile.full_name.split(' ')[0]}!</h2>
+            <p className="text-sm text-white/70 mt-0.5">Keep up the great work on your training.</p>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: 'Assigned', value: assignmentsWithProgress.length, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-50' },
@@ -189,6 +218,86 @@ export default async function DashboardPage() {
                       </div>
                     </div>
                   </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Score summary */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>My Score Summary</CardTitle>
+            <Link href="/score-summary" className="text-sm text-blue-600 hover:underline">View full history</Link>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="flex items-center gap-3 rounded-xl border border-slate-200 p-4">
+                <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+                  <Target className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Average Score</p>
+                  <p className="text-xl font-bold text-slate-900">{avgScore !== null ? `${avgScore}%` : '—'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl border border-slate-200 p-4">
+                <div className="h-10 w-10 rounded-xl bg-green-50 flex items-center justify-center shrink-0">
+                  <Award className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Certificates Earned</p>
+                  <p className="text-xl font-bold text-slate-900">{myCertificates?.length ?? 0}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl border border-slate-200 p-4">
+                <div className="h-10 w-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+                  <TrendingUp className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Quiz Attempts</p>
+                  <p className="text-xl font-bold text-slate-900">{quizAttempts?.length ?? 0}</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* My certificates */}
+        <Card>
+          <CardHeader>
+            <CardTitle>My Certificates</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!myCertificates || myCertificates.length === 0 ? (
+              <div className="text-center py-10">
+                <Award className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+                <p className="text-slate-500 font-medium text-sm">No certificates yet</p>
+                <p className="text-slate-400 text-xs mt-1">Complete a training to earn one automatically.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {myCertificates.map(cert => (
+                  <div key={cert.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
+                    <div className="h-9 w-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
+                      <Award className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-900 text-sm truncate">{cert.module_title}</p>
+                      <p className="text-xs text-slate-400">
+                        Issued {formatDate(cert.issued_at)}
+                        {cert.max_score ? ` · Score: ${cert.score}/${cert.max_score}` : ''}
+                      </p>
+                    </div>
+                    <a
+                      href={`/api/certificate?certificateId=${cert.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline shrink-0"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Download
+                    </a>
+                  </div>
                 ))}
               </div>
             )}
