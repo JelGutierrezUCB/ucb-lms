@@ -24,15 +24,16 @@ export function QuizAnswersDialog({ attemptId, employeeName, onOpenChange }: Pro
   useEffect(() => {
     if (!attemptId) return
     let cancelled = false
-    setLoading(true)
-    setError(null)
 
-    supabase
-      .from('quiz_attempts')
-      .select('answers, completed_at, content_block_id')
-      .eq('id', attemptId)
-      .single()
-      .then(async ({ data: attempt, error: attemptErr }) => {
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const { data: attempt, error: attemptErr } = await supabase
+          .from('quiz_attempts')
+          .select('answers, completed_at, content_block_id')
+          .eq('id', attemptId)
+          .single()
         if (cancelled) return
         if (attemptErr || !attempt) { setError('Could not load this attempt'); return }
 
@@ -49,10 +50,14 @@ export function QuizAnswersDialog({ attemptId, employeeName, onOpenChange }: Pro
         const answerArray = (attempt.answers ?? []) as (number | string)[]
         setAnswers(Object.fromEntries(answerArray.map((a, i) => [i, a])))
         setAttemptDate(attempt.completed_at)
-      })
-      .catch(() => { if (!cancelled) setError('Could not load this attempt') })
-      .finally(() => { if (!cancelled) setLoading(false) })
+      } catch {
+        if (!cancelled) setError('Could not load this attempt')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
 
+    load()
     return () => { cancelled = true }
   }, [attemptId])
 
