@@ -4,7 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { BookOpen, CheckCircle, Clock, TrendingUp, Star, Target, Award, GraduationCap, Download } from 'lucide-react'
+import { BookOpen, CheckCircle, Clock, TrendingUp, Star, Target, Award, Download } from 'lucide-react'
 import Link from 'next/link'
 import { cn, getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
 import type { Profile, Module, Assignment, Certificate } from '@/types'
@@ -129,15 +129,17 @@ export default async function DashboardPage() {
       <Header title={`Welcome back, ${profile.full_name.split(' ')[0]}`} />
 
       <main className="flex-1 p-6 space-y-6">
-        {/* Welcome banner */}
-        <div className="rounded-2xl bg-gradient-to-r from-[#241B4E] to-[#3a2d7a] p-6 text-white flex items-center gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/10">
-            <GraduationCap className="h-8 w-8 text-[#7CC24A]" />
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-widest text-[#7CC24A] font-semibold">UCB Training Portal</p>
-            <h2 className="text-xl font-bold">Welcome back, {profile.full_name.split(' ')[0]}!</h2>
-            <p className="text-sm text-white/70 mt-0.5">Keep up the great work on your training.</p>
+        {/* Welcome banner — white so the logo (opaque white background) sits naturally */}
+        <div className="rounded-2xl bg-white border border-slate-200 p-6 flex flex-wrap items-center gap-6">
+          <img
+            src="/branding/ucb-family-of-logos.png"
+            alt="UCB — a family of companies"
+            className="h-16 sm:h-20 w-auto shrink-0"
+          />
+          <div className="border-l border-slate-200 pl-6 flex-1 min-w-[200px]">
+            <p className="text-xs uppercase tracking-widest text-green-600 font-semibold">UCB Training Portal</p>
+            <h2 className="text-xl font-bold text-[#241B4E]">Welcome back, {profile.full_name.split(' ')[0]}!</h2>
+            <p className="text-sm text-slate-500 mt-0.5">Keep up the great work on your training.</p>
           </div>
         </div>
 
