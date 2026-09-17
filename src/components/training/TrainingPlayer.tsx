@@ -129,62 +129,66 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
   }
 
   return (
-    <div className="flex h-full">
-      {/* Sidebar: section list */}
-      <div className="w-72 shrink-0 border-r border-slate-200 bg-white flex flex-col">
-        <div className="p-5 border-b border-slate-200">
-          <div className="flex items-center gap-2 mb-3">
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-white text-sm font-bold"
-              style={{ backgroundColor: getCategoryColor(module.category) }}
-            >
-              {module.title.charAt(0)}
-            </div>
-            <div className="min-w-0">
-              <p className="font-semibold text-slate-900 text-sm truncate">{module.title}</p>
-              <p className="text-xs text-slate-400">{getCategoryLabel(module.category)}</p>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs text-slate-500">
-              <span>{completedCount} of {totalSections} sections</span>
-              <span>{progressPercent}%</span>
-            </div>
-            <Progress
-              value={progressPercent}
-              indicatorClassName={progressPercent === 100 ? 'bg-green-500' : undefined}
-            />
-          </div>
-        </div>
-
-        {module.description && (
-          <div className="border-b border-slate-200 shrink-0">
-            <button
-              onClick={() => setSummaryOpen(o => !o)}
-              className="w-full flex items-center justify-between px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <span>Course Summary</span>
-              {summaryOpen ? (
-                <ChevronUp className="h-4 w-4 text-slate-400" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-slate-400" />
-              )}
-            </button>
-            {summaryOpen && (
-              <div className="px-5 pb-4 space-y-2">
-                <p className="text-sm text-slate-500 leading-relaxed whitespace-pre-line">{module.description}</p>
-                {module.estimated_minutes > 0 && (
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>{module.estimated_minutes} min estimated</span>
-                  </div>
-                )}
-              </div>
+    <div className="flex flex-col h-full">
+      {/* Header: course summary, full width — kept out of the sidebar so the
+          section list underneath isn't pushed below the fold by a long
+          description. */}
+      {module.description && (
+        <div className="border-b border-slate-200 bg-white shrink-0">
+          <button
+            onClick={() => setSummaryOpen(o => !o)}
+            className="w-full flex items-center justify-between px-6 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <span>Course Summary</span>
+            {summaryOpen ? (
+              <ChevronUp className="h-4 w-4 text-slate-400" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-slate-400" />
             )}
-          </div>
-        )}
+          </button>
+          {summaryOpen && (
+            <div className="px-6 pb-4 max-w-3xl space-y-2">
+              <p className="text-sm text-slate-500 leading-relaxed whitespace-pre-line">{module.description}</p>
+              {module.estimated_minutes > 0 && (
+                <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>{module.estimated_minutes} min estimated</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+      <div className="flex flex-1 min-h-0">
+        {/* Sidebar: section list only */}
+        <div className="w-72 shrink-0 border-r border-slate-200 bg-white flex flex-col">
+          <div className="p-5 border-b border-slate-200">
+            <div className="flex items-center gap-2 mb-3">
+              <div
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-white text-sm font-bold"
+                style={{ backgroundColor: getCategoryColor(module.category) }}
+              >
+                {module.title.charAt(0)}
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900 text-sm truncate">{module.title}</p>
+                <p className="text-xs text-slate-400">{getCategoryLabel(module.category)}</p>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-slate-500">
+                <span>{completedCount} of {totalSections} sections</span>
+                <span>{progressPercent}%</span>
+              </div>
+              <Progress
+                value={progressPercent}
+                indicatorClassName={progressPercent === 100 ? 'bg-green-500' : undefined}
+              />
+            </div>
+          </div>
+
+          <nav className="flex-1 overflow-y-auto p-3 space-y-1">
           {sections.map((section, i) => {
             const isComplete = completedSections.has(section.id)
             const isCurrent = i === currentSectionIndex
@@ -217,11 +221,11 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
               </button>
             )
           })}
-        </nav>
-      </div>
+          </nav>
+        </div>
 
-      {/* Main content */}
-      <div className="flex-1 overflow-y-auto">
+        {/* Main content */}
+        <div className="flex-1 overflow-y-auto">
         {isAllComplete && !reviewMode ? (
           <div className="flex flex-col items-center min-h-full p-12 text-center">
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100 mb-6">
@@ -343,6 +347,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
             )}
           </div>
         )}
+        </div>
       </div>
     </div>
   )
