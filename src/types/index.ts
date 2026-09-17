@@ -85,6 +85,20 @@ export interface DocumentContent {
   file_name: string // also doubles as the display label when link_url is set
   mime_type?: string
   link_url?: string // external URL (e.g. an SOP hosted on the company's own system) instead of an uploaded file
+  require_signed_upload?: boolean // when true, the employee must upload their own signed/completed copy of this document (tracked in document_uploads) before the section can be marked complete
+}
+
+// One employee's uploaded signed/completed copy of a "document" content
+// block that requires it — see DocumentContent.require_signed_upload.
+// Stored in the private "signed-documents" bucket, one object per
+// (user, content_block) pair; re-uploading replaces it.
+export interface DocumentUpload {
+  id: string
+  user_id: string
+  content_block_id: string
+  storage_path: string
+  file_name: string
+  uploaded_at: string
 }
 
 export type VideoSource = 'youtube' | 'upload'

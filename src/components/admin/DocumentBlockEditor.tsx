@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import type { DocumentContent } from '@/types'
@@ -100,6 +101,19 @@ export function DocumentBlockEditor({ content, onChange }: Props) {
           <Link2 className="h-4 w-4" /> Link to URL
         </button>
       </div>
+
+      <label className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 cursor-pointer">
+        <Checkbox
+          checked={!!content.require_signed_upload}
+          onCheckedChange={checked => onChange({ ...content, require_signed_upload: checked === true })}
+          className="mt-0.5"
+        />
+        <span className="text-sm text-slate-600">
+          <span className="font-medium text-slate-800">Require a signed copy back</span>
+          <br />
+          Employees must upload their own completed/signed version of this document here before they can mark this training complete.
+        </span>
+      </label>
 
       {source === 'link' ? (
         content.link_url ? (

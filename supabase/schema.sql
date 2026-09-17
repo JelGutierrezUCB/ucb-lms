@@ -123,6 +123,21 @@ create table quiz_attempts (
   completed_at timestamptz default now()
 );
 
+-- Tracks an employee's uploaded signed/completed copy of a "document"
+-- content block that has require_signed_upload set in its content jsonb.
+-- One row per (user, content_block); re-uploading replaces both the row
+-- and the underlying storage object (see the signed-documents bucket
+-- policies further down).
+create table document_uploads (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id) on delete cascade not null,
+  content_block_id uuid references content_blocks(id) on delete cascade not null,
+  storage_path text not null,
+  file_name text not null,
+  uploaded_at timestamptz default now(),
+  unique(user_id, content_block_id)
+);
+
 -- Persistent record of every completion certificate issued. Snapshots the
 -- employee/company/module names and score at the moment of issuance, so a
 -- certificate stays accurate even if the person is later renamed, moved to
@@ -217,6 +232,7 @@ alter table content_blocks enable row level security;
 alter table assignments enable row level security;
 alter table section_progress enable row level security;
 alter table quiz_attempts enable row level security;
+alter table document_uploads enable row level security;
 alter table certificates enable row level security;
 
 -- Profile policies
@@ -330,6 +346,21 @@ create policy "quiz_select" on quiz_attempts for select using (
 );
 create policy "quiz_insert" on quiz_attempts for insert with check (true);
 
+-- Document upload policies
+create policy "document_uploads_select" on document_uploads for select using (
+  user_id = auth.uid() or
+  exists (select 1 from profiles where id = auth.uid() and role in ('admin', 'manager'))
+);
+-- Permissive insert/update (like progress_insert/quiz_insert) so an
+-- admin/manager previewing training "as" an employee (proxy feature) can
+-- still record an upload under that employee's user_id.
+create policy "document_uploads_insert" on document_uploads for insert with check (true);
+create policy "document_uploads_update" on document_uploads for update using (true);
+create policy "document_uploads_delete" on document_uploads for delete using (
+  user_id = auth.uid() or
+  exists (select 1 from profiles where id = auth.uid() and role = 'admin')
+);
+
 -- Seed initial categories (just for reference)
 -- Categories: onboarding, sales, warehouse, ucbzerowaste, general
 
@@ -420,4 +451,37 @@ create policy "avatars_update" on storage.objects for update using (
 );
 create policy "avatars_delete" on storage.objects for delete using (
   bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Private bucket for employee-uploaded signed documents, one object per
+-- user per content block (<user_id>/<content_block_id>, no file extension —
+-- content-type comes from the uploaded file itself, not the path). Same
+-- admin/manager override as document_uploads' RLS, for the proxy-upload case.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('signed-documents', 'signed-documents', false, 52428800, null) -- 50MB
+on conflict (id) do update set file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+create policy "signed_documents_select" on storage.objects for select using (
+  bucket_id = 'signed-documents' and (
+    (storage.foldername(name))[1] = auth.uid()::text or
+    exists (select 1 from profiles where id = auth.uid() and role in ('admin', 'manager'))
+  )
+);
+create policy "signed_documents_insert" on storage.objects for insert with check (
+  bucket_id = 'signed-documents' and (
+    (storage.foldername(name))[1] = auth.uid()::text or
+    exists (select 1 from profiles where id = auth.uid() and role in ('admin', 'manager'))
+  )
+);
+create policy "signed_documents_update" on storage.objects for update using (
+  bucket_id = 'signed-documents' and (
+    (storage.foldername(name))[1] = auth.uid()::text or
+    exists (select 1 from profiles where id = auth.uid() and role in ('admin', 'manager'))
+  )
+);
+create policy "signed_documents_delete" on storage.objects for delete using (
+  bucket_id = 'signed-documents' and (
+    (storage.foldername(name))[1] = auth.uid()::text or
+    exists (select 1 from profiles where id = auth.uid() and role in ('admin', 'manager'))
+  )
 );

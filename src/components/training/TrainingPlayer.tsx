@@ -13,8 +13,9 @@ import { VideoViewer } from './VideoViewer'
 import { QuizViewer } from './QuizViewer'
 import { SlideViewer } from './SlideViewer'
 import { DocumentViewer } from './DocumentViewer'
+import { SignedDocumentUpload } from './SignedDocumentUpload'
 import { cn, getCategoryColor, getCategoryLabel } from '@/lib/utils'
-import type { Module, ContentBlock, QuizContent } from '@/types'
+import type { Module, ContentBlock, QuizContent, DocumentContent } from '@/types'
 import { useProxy } from '@/contexts/ProxyContext'
 
 interface SectionWithBlocks {
@@ -37,6 +38,10 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
     new Set(sections.filter(s => s.is_completed).map(s => s.id))
   )
   const [quizPassed, setQuizPassed] = useState<Set<string>>(new Set())
+  // content_block ids whose required signed-upload is present — populated by
+  // each SignedDocumentUpload instance reporting its own status on mount and
+  // on every upload/replace, so this stays accurate across reloads.
+  const [uploadedBlocks, setUploadedBlocks] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(true)
   // Once every section is done we default to the completion/certificate
@@ -58,7 +63,14 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
 
   const hasQuiz = currentSection?.content_blocks.some(b => b.type === 'quiz')
   const quizBlockId = currentSection?.content_blocks.find(b => b.type === 'quiz')?.id
-  const canComplete = !hasQuiz || (quizBlockId ? quizPassed.has(quizBlockId) : true)
+  const quizOk = !hasQuiz || (quizBlockId ? quizPassed.has(quizBlockId) : true)
+
+  const requiredUploadBlocks = currentSection?.content_blocks.filter(
+    b => b.type === 'document' && (b.content as DocumentContent).require_signed_upload
+  ) ?? []
+  const uploadsOk = requiredUploadBlocks.every(b => uploadedBlocks.has(b.id))
+
+  const canComplete = quizOk && uploadsOk
 
   // A section is reachable if it's already done, the one right after the
   // learner's last completed section, or one they've reached this session —
@@ -77,7 +89,11 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
       return
     }
     if (!canComplete) {
-      toast.error('Please pass the quiz before completing this section')
+      toast.error(
+        !uploadsOk
+          ? 'Please upload your signed document(s) before completing this section'
+          : 'Please pass the quiz before completing this section'
+      )
       return
     }
     setSaving(true)
@@ -303,6 +319,20 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
                   {block.type === 'video' && <VideoViewer content={block.content as any} />}
                   {block.type === 'slides' && <SlideViewer content={block.content as any} />}
                   {block.type === 'document' && <DocumentViewer blockId={block.id} content={block.content as any} />}
+                  {block.type === 'document' && (block.content as DocumentContent).require_signed_upload && (
+                    <div className="mt-3">
+                      <SignedDocumentUpload
+                        blockId={block.id}
+                        userId={activeUserId}
+                        onStatusChange={uploaded => setUploadedBlocks(prev => {
+                          const next = new Set(prev)
+                          if (uploaded) next.add(block.id)
+                          else next.delete(block.id)
+                          return next
+                        })}
+                      />
+                    </div>
+                  )}
                   {block.type === 'quiz' && (
                     <QuizViewer
                       block={block}
@@ -339,6 +369,12 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
                 {!completedSections.has(currentSection.id) && <ChevronRight className="h-4 w-4 ml-1" />}
               </Button>
             </div>
+
+            {!uploadsOk && !completedSections.has(currentSection.id) && (
+              <p className="text-sm text-amber-600 text-center">
+                Upload your signed document(s) above to unlock this section
+              </p>
+            )}
 
             {hasQuiz && !quizPassed.has(quizBlockId ?? '') && !completedSections.has(currentSection.id) && (
               <p className="text-sm text-amber-600 text-center">
