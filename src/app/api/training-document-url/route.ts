@@ -29,13 +29,19 @@ export async function POST(req: NextRequest) {
   const isStaff = profile?.role === 'admin' || profile?.role === 'manager'
 
   if (!isStaff) {
-    const { data: assignment } = await supabase
+    // .maybeSingle() errors out (and silently nulls `data`) when more than
+    // one row matches — which happens for anyone with a partial/per-section
+    // assignment to this module, since that's one assignment row per
+    // assigned section, not one per module. That silently 403'd every
+    // employee assigned that way, while staff (who skip this check) and
+    // whole-module-assigned employees (exactly one row) never hit it.
+    const { data: assignments } = await supabase
       .from('assignments')
       .select('id')
       .eq('user_id', user.id)
       .eq('module_id', moduleId)
-      .maybeSingle()
-    if (!assignment) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      .limit(1)
+    if (!assignments || assignments.length === 0) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const content = block.content as { storage_path: string; file_name: string; mime_type?: string }
