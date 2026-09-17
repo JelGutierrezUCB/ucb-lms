@@ -107,7 +107,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
     setSaving(false)
 
     if (isLastSection) {
-      toast.success('Training complete! Great job!')
+      toast.success(module.module_type === 'checklist' ? 'Checklist complete! Great job!' : 'Training complete! Great job!')
       fetch('/api/notifications/completion', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -247,7 +247,9 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100 mb-6">
               <Trophy className="h-10 w-10 text-green-600" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Training Complete!</h2>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
+              {module.module_type === 'checklist' ? 'Checklist Complete!' : 'Training Complete!'}
+            </h2>
             <p className="text-slate-500 mb-6">
               You've completed all {totalSections} sections of <strong>{module.title}</strong>. Congratulations!
             </p>
@@ -364,7 +366,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
                   ? 'Back to Certificate'
                   : completedSections.has(currentSection.id)
                   ? isLastSection ? 'Completed ✓' : 'Next Section'
-                  : isLastSection ? 'Complete Training' : 'Mark Complete & Continue'
+                  : isLastSection ? (module.module_type === 'checklist' ? 'Complete Checklist' : 'Complete Training') : 'Mark Complete & Continue'
                 }
                 {!completedSections.has(currentSection.id) && <ChevronRight className="h-4 w-4 ml-1" />}
               </Button>

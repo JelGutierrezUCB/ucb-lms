@@ -24,7 +24,7 @@ import { SlideBlockEditor } from './SlideBlockEditor'
 import { DocumentBlockEditor } from './DocumentBlockEditor'
 import { AssignModuleDialog } from './AssignModuleDialog'
 import { extractYoutubeId } from '@/lib/utils'
-import type { Module, Section, ContentBlock, ContentBlockType, QuizContent, TextContent, VideoContent, SlidesContent, Group } from '@/types'
+import type { Module, Section, ContentBlock, ContentBlockType, QuizContent, TextContent, VideoContent, SlidesContent, Group, ModuleType } from '@/types'
 import { MODULE_CATEGORIES } from '@/types'
 
 interface SectionWithBlocks extends Section {
@@ -98,6 +98,7 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
   const [title, setTitle] = useState(existingModule?.title ?? '')
   const [description, setDescription] = useState(existingModule?.description ?? '')
   const [category, setCategory] = useState(existingModule?.category ?? 'general')
+  const [moduleType, setModuleType] = useState<ModuleType>(existingModule?.module_type ?? 'training')
   const [estimatedMinutes, setEstimatedMinutes] = useState(existingModule?.estimated_minutes ?? 30)
   const [durationUnit, setDurationUnit] = useState<'minutes' | 'hours' | 'days'>('minutes')
   const [isPublished, setIsPublished] = useState(existingModule?.is_published ?? false)
@@ -367,13 +368,13 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
       if (moduleId) {
         const { error } = await supabase
           .from('modules')
-          .update({ title, description, category, estimated_minutes: estimatedMinutes, is_published: isPublished })
+          .update({ title, description, category, estimated_minutes: estimatedMinutes, is_published: isPublished, module_type: moduleType })
           .eq('id', moduleId)
         if (error) throw error
       } else {
         const { data, error } = await supabase
           .from('modules')
-          .insert({ title, description, category, estimated_minutes: estimatedMinutes, is_published: isPublished, created_by: createdBy })
+          .insert({ title, description, category, estimated_minutes: estimatedMinutes, is_published: isPublished, module_type: moduleType, created_by: createdBy })
           .select()
           .single()
         if (error) throw error
@@ -796,6 +797,13 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
   const ungroupedSections = sections.filter(s => !s.group_id && !s.is_archived)
   const archivedSections = sections.filter(s => s.is_archived)
 
+  // What a "section" is called in the UI depends on the module type — a
+  // checklist module's sections are really just individual documents, not
+  // lessons, so "training" would be confusing.
+  const itemLabel = moduleType === 'checklist' ? 'Item' : 'Training'
+  const itemLabelLower = itemLabel.toLowerCase()
+  const itemLabelPlural = moduleType === 'checklist' ? 'Checklist Items' : 'Trainings'
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header actions */}
@@ -838,6 +846,23 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Module Type</Label>
+              <Select value={moduleType} onValueChange={v => setModuleType(v as ModuleType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="training">Training</SelectItem>
+                  <SelectItem value="checklist">Document Checklist</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-400">
+                {moduleType === 'checklist'
+                  ? 'A set of documents to review/sign off on — the player says "Complete Checklist" instead of "Complete Training".'
+                  : 'A normal lesson employees work through (text, video, and/or a quiz).'}
+              </p>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -895,12 +920,12 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900">
-            Trainings <span className="text-slate-400 font-normal">({sections.length - archivedSections.length} training{sections.length - archivedSections.length !== 1 ? 's' : ''}{groups.length > 0 ? `, ${groups.length} group${groups.length !== 1 ? 's' : ''}` : ''})</span>
+            {itemLabelPlural} <span className="text-slate-400 font-normal">({sections.length - archivedSections.length} {itemLabelLower}{sections.length - archivedSections.length !== 1 ? 's' : ''}{groups.length > 0 ? `, ${groups.length} group${groups.length !== 1 ? 's' : ''}` : ''})</span>
           </h2>
           <div className="flex items-center gap-2">
             <Button onClick={() => addSection(null)}>
               <Plus className="h-4 w-4 mr-2" />
-              Add Training
+              Add {itemLabel}
             </Button>
             <Button variant="outline" onClick={addGroup}>
               <Folder className="h-4 w-4 mr-2" />
@@ -909,17 +934,22 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
           </div>
         </div>
         <p className="text-sm text-slate-500 -mt-2">
-          A <strong>training</strong> is a lesson employees complete (text, video, and/or a quiz). A <strong>group</strong> is
-          an optional folder for organizing many trainings — only add one if you have several related trainings to cluster together.
+          {moduleType === 'checklist' ? (
+            <>A <strong>{itemLabelLower}</strong> is one document employees review and sign off on. A <strong>group</strong> is
+            an optional folder for organizing many {itemLabelLower}s — only add one if you have several related {itemLabelLower}s to cluster together.</>
+          ) : (
+            <>A <strong>training</strong> is a lesson employees complete (text, video, and/or a quiz). A <strong>group</strong> is
+            an optional folder for organizing many trainings — only add one if you have several related trainings to cluster together.</>
+          )}
         </p>
 
         {sections.length === 0 && groups.length === 0 && (
           <Card>
             <div className="text-center py-12">
-              <p className="text-slate-500">No trainings yet. Add your first training to get started.</p>
+              <p className="text-slate-500">No {itemLabelLower}s yet. Add your first {itemLabelLower} to get started.</p>
               <Button className="mt-4" onClick={() => addSection(null)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Add Training
+                Add {itemLabel}
               </Button>
             </div>
           </Card>
@@ -975,11 +1005,11 @@ export function ModuleEditor({ module: existingModule, initialGroups = [], initi
               {isExpanded && (
                 <div className="px-5 pb-5 space-y-3 bg-slate-50/60">
                   {groupSections.length === 0 ? (
-                    <p className="text-sm text-slate-400 py-2">No trainings in this group yet.</p>
+                    <p className="text-sm text-slate-400 py-2">No {itemLabelLower}s in this group yet.</p>
                   ) : groupSections.map(s => renderSection(s, groupSections))}
                   <Button variant="outline" size="sm" onClick={() => addSection(group.id)}>
                     <Plus className="h-3.5 w-3.5 mr-1.5" />
-                    Add Training to Group
+                    Add {itemLabel} to Group
                   </Button>
                 </div>
               )}

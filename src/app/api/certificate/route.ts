@@ -180,9 +180,27 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  // Otherwise check normal section-by-section completion
-  const { data: sections } = await admin.from('sections').select('id').eq('module_id', moduleId)
-  const sectionIds = (sections ?? []).map(s => s.id)
+  // Otherwise check normal section-by-section completion. What counts as
+  // "done" depends on what this user was actually assigned: if they're
+  // assigned specific sections (not the whole module), only those need to
+  // be complete — mirroring the training player itself, which only ever
+  // shows them their assigned sections. Checking against every section of
+  // the module here previously meant a partially-assigned employee could
+  // never get a certificate, since they'd never complete sections they
+  // were never shown. Archived sections never count either way.
+  const { data: userAssignments } = await admin
+    .from('assignments')
+    .select('section_id')
+    .eq('user_id', userId)
+    .eq('module_id', moduleId)
+  const hasWholeModuleAssignment = (userAssignments ?? []).some(a => !a.section_id)
+  const assignedSectionIds = (userAssignments ?? []).filter(a => a.section_id).map(a => a.section_id as string)
+
+  const { data: allSections } = await admin.from('sections').select('id').eq('module_id', moduleId).eq('is_archived', false)
+  const allSectionIds = (allSections ?? []).map(s => s.id)
+  const sectionIds = (!hasWholeModuleAssignment && assignedSectionIds.length > 0)
+    ? allSectionIds.filter(id => assignedSectionIds.includes(id))
+    : allSectionIds
   if (sectionIds.length === 0) return NextResponse.json({ error: 'Not completed' }, { status: 404 })
 
   const { data: sectionProgress } = await admin

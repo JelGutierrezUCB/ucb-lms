@@ -95,6 +95,9 @@ export function ModuleList({ initialModules }: { initialModules: Module[] }) {
                       >
                         {getCategoryLabel(mod.category)}
                       </Badge>
+                      {mod.module_type === 'checklist' && (
+                        <Badge variant="outline">Checklist</Badge>
+                      )}
                       <Badge variant={mod.is_published ? 'success' : 'outline'}>
                         {mod.is_published ? 'Published' : 'Draft'}
                       </Badge>

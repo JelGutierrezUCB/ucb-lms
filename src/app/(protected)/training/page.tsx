@@ -192,12 +192,16 @@ export default async function TrainingPage({
                         </p>
                         {isAssigned && <Badge variant="default">Assigned</Badge>}
                       </div>
-                      <Badge
-                        className="self-start mb-3"
-                        style={{ backgroundColor: `${getCategoryColor(mod.category)}20`, color: getCategoryColor(mod.category) }}
-                      >
-                        {getCategoryLabel(mod.category)}
-                      </Badge>
+                      <div className="flex items-center gap-1.5 mb-3">
+                        <Badge
+                          style={{ backgroundColor: `${getCategoryColor(mod.category)}20`, color: getCategoryColor(mod.category) }}
+                        >
+                          {getCategoryLabel(mod.category)}
+                        </Badge>
+                        {mod.module_type === 'checklist' && (
+                          <Badge variant="outline">Checklist</Badge>
+                        )}
+                      </div>
                       {mod.description && (
                         <p className="text-sm text-slate-500 line-clamp-2 mb-3">{mod.description}</p>
                       )}

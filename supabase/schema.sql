@@ -27,6 +27,11 @@ create table modules (
   created_by uuid references profiles(id),
   estimated_minutes int default 30,
   auto_assign_all boolean not null default false,
+  -- Distinguishes a normal multi-step training (text/video/quiz) from a
+  -- module that's really just a set of documents to review and sign off on
+  -- (e.g. "New Hire Packet") — lets the UI use the right terminology
+  -- ("Complete Checklist" vs "Complete Training", etc.).
+  module_type text not null default 'training' check (module_type in ('training', 'checklist')),
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -156,10 +161,17 @@ create table certificates (
   unique(user_id, module_id)
 );
 
--- Auto-issues a certificate the moment a user finishes every section of a
--- module (which, per the training player's own gating, means any quiz in
--- those sections was already passed) — fires on every section_progress
--- insert and checks completion for that section's module.
+-- Auto-issues a certificate the moment a user finishes every section they
+-- were actually assigned in a module (which, per the training player's own
+-- gating, means any quiz in those sections was already passed) — fires on
+-- every section_progress insert and checks completion for that section's
+-- module. What counts as "every section" depends on the assignment: a
+-- whole-module assignment (or no assignment row at all, e.g. an admin
+-- previewing) requires every active section; a partial/per-section
+-- assignment requires only the sections actually assigned — otherwise an
+-- employee assigned just one section of a multi-section module could never
+-- get a certificate, since they'd never complete sections they were never
+-- shown.
 create or replace function issue_certificate_on_completion()
 returns trigger
 language plpgsql
@@ -168,6 +180,8 @@ set search_path = public
 as $$
 declare
   v_module_id uuid;
+  v_has_whole_module boolean;
+  v_required_section_ids uuid[];
   v_total_sections int;
   v_completed_sections int;
   v_employee_name text;
@@ -181,14 +195,29 @@ begin
     return new;
   end if;
 
-  -- Archived trainings aren't part of the active curriculum anymore, so
-  -- they don't count toward what's required for a certificate.
-  select count(*) into v_total_sections from sections where module_id = v_module_id and is_archived = false;
+  select exists(
+    select 1 from assignments
+    where user_id = new.user_id and module_id = v_module_id and section_id is null
+  ) into v_has_whole_module;
+
+  if v_has_whole_module then
+    select array_agg(id) into v_required_section_ids from sections where module_id = v_module_id and is_archived = false;
+  else
+    select array_agg(a.section_id) into v_required_section_ids
+    from assignments a
+    join sections s on s.id = a.section_id
+    where a.user_id = new.user_id and a.module_id = v_module_id and s.is_archived = false;
+
+    if v_required_section_ids is null then
+      select array_agg(id) into v_required_section_ids from sections where module_id = v_module_id and is_archived = false;
+    end if;
+  end if;
+
+  v_total_sections := coalesce(array_length(v_required_section_ids, 1), 0);
 
   select count(*) into v_completed_sections
-  from section_progress sp
-  join sections s on s.id = sp.section_id
-  where sp.user_id = new.user_id and s.module_id = v_module_id and s.is_archived = false;
+  from section_progress
+  where user_id = new.user_id and section_id = any(v_required_section_ids);
 
   if v_total_sections = 0 or v_completed_sections < v_total_sections then
     return new;
@@ -204,8 +233,7 @@ begin
   select qa.score, qa.max_score into v_best_score, v_best_max
   from quiz_attempts qa
   join content_blocks cb on cb.id = qa.content_block_id
-  join sections s on s.id = cb.section_id
-  where qa.user_id = new.user_id and s.module_id = v_module_id and qa.max_score > 0
+  where qa.user_id = new.user_id and cb.section_id = any(v_required_section_ids) and qa.max_score > 0
   order by (qa.score::float / qa.max_score) desc
   limit 1;
 

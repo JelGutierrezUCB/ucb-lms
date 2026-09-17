@@ -34,13 +34,14 @@ export default async function ReportsPage() {
     { data: allProgress },
     { data: quizAttempts },
     { data: manualCompletions },
+    { data: documentUploads },
   ] = await Promise.all([
     supabase.from('modules').select('*').eq('is_published', true).order('title'),
     supabase.from('assignments')
       .select('id, user_id, module_id, assigned_at, due_date')
       .in('user_id', employeeIds.length ? employeeIds : ['']),
     supabase.from('sections').select('id, module_id, title, order_index'),
-    supabase.from('content_blocks').select('id, section_id, type'),
+    supabase.from('content_blocks').select('id, section_id, type, title, content'),
     supabase.from('section_progress')
       .select('user_id, section_id, completed_at, sections!inner(module_id)')
       .in('user_id', employeeIds.length ? employeeIds : ['']),
@@ -52,6 +53,10 @@ export default async function ReportsPage() {
       .select('id, user_id, module_id, score, max_score, passed, trainer_id, completion_date, location, notes, created_at')
       .in('user_id', employeeIds.length ? employeeIds : [''])
       .order('completion_date', { ascending: false }),
+    supabase.from('document_uploads')
+      .select('id, user_id, content_block_id, storage_path, file_name, uploaded_at')
+      .in('user_id', employeeIds.length ? employeeIds : [''])
+      .order('uploaded_at', { ascending: false }),
   ])
 
   return (
@@ -67,6 +72,7 @@ export default async function ReportsPage() {
           progress={(allProgress ?? []) as any[]}
           quizAttempts={(quizAttempts ?? []) as any[]}
           manualCompletions={(manualCompletions ?? []) as any[]}
+          documentUploads={(documentUploads ?? []) as any[]}
           viewerRole={profile?.role ?? 'manager'}
         />
       </main>

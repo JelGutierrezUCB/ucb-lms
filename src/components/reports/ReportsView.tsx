@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import {
   Search, ChevronDown, ChevronUp, BarChart3, CheckCircle, Clock, AlertCircle, Download,
-  Check, X, Trash2, Award, ExternalLink,
+  Check, X, Trash2, Award, ExternalLink, FileCheck, FileClock, Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { Profile, Module } from '@/types'
+import type { Profile, Module, DocumentContent } from '@/types'
 import { formatDate, getCategoryLabel } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { QuizAnswersDialog } from './QuizAnswersDialog'
@@ -40,19 +40,29 @@ type ManualCompletion = {
   created_at: string
 }
 
+type DocumentUpload = {
+  id: string
+  user_id: string
+  content_block_id: string
+  storage_path: string
+  file_name: string
+  uploaded_at: string
+}
+
 interface Props {
   employees: Profile[]
   modules: Module[]
   assignments: { id: string; user_id: string; module_id: string; assigned_at: string; due_date: string | null }[]
   sections: { id: string; module_id: string; title: string; order_index: number }[]
-  contentBlocks: { id: string; section_id: string; type: string }[]
+  contentBlocks: { id: string; section_id: string; type: string; title?: string | null; content?: unknown }[]
   progress: { user_id: string; section_id: string; completed_at: string; sections: { module_id: string } }[]
   quizAttempts: { id: string; user_id: string; content_block_id: string; score: number; max_score: number; completed_at: string }[]
   manualCompletions?: ManualCompletion[]
+  documentUploads?: DocumentUpload[]
   viewerRole: string
 }
 
-export function ReportsView({ employees, modules, assignments: rawAssignments, sections, contentBlocks, progress, quizAttempts, manualCompletions = [], viewerRole }: Props) {
+export function ReportsView({ employees, modules, assignments: rawAssignments, sections, contentBlocks, progress, quizAttempts, manualCompletions = [], documentUploads = [], viewerRole }: Props) {
   const supabase = createClient()
   const [activeTab, setActiveTab] = useState<'all' | 'office' | 'production'>('all')
   const [search, setSearch] = useState('')
@@ -132,6 +142,37 @@ export function ReportsView({ employees, modules, assignments: rawAssignments, s
     return map
   }, [contentBlocks, sectionToModule])
 
+  const moduleTitleById = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const m of modules) map[m.id] = m.title
+    return map
+  }, [modules])
+
+  // Document blocks flagged "require a signed copy back" (see DocumentBlockEditor),
+  // grouped by the module they belong to — used to build the per-employee
+  // Signed Documents section below (uploaded + still-pending, per assigned module).
+  const requiredUploadBlocksByModule = useMemo(() => {
+    const map: Record<string, { id: string; label: string }[]> = {}
+    for (const cb of contentBlocks) {
+      if (cb.type !== 'document') continue
+      const content = cb.content as DocumentContent | undefined
+      if (!content?.require_signed_upload) continue
+      const moduleId = sectionToModule[cb.section_id]
+      if (!moduleId) continue
+      const label = cb.title || content.file_name || 'Document'
+      ;(map[moduleId] ?? (map[moduleId] = [])).push({ id: cb.id, label })
+    }
+    return map
+  }, [contentBlocks, sectionToModule])
+
+  const documentUploadByUserBlock = useMemo(() => {
+    const map: Record<string, DocumentUpload> = {}
+    for (const du of documentUploads) {
+      map[`${du.user_id}_${du.content_block_id}`] = du
+    }
+    return map
+  }, [documentUploads])
+
   // Best raw quiz score (not just %) per user per module, for the "Score" column
   const bestRawScoreByUserModule = useMemo(() => {
     const map: Record<string, { score: number; max: number; pct: number }> = {}
@@ -161,6 +202,21 @@ export function ReportsView({ employees, modules, assignments: rawAssignments, s
     if (error) { toast.error(error.message); return }
     setRemovedIds(prev => new Set(prev).add(assignmentId))
     toast.success(`Removed "${moduleTitle}" from ${employeeName}`)
+  }
+
+  const [openingUploadId, setOpeningUploadId] = useState<string | null>(null)
+
+  async function openSignedDocument(upload: DocumentUpload, mode: 'view' | 'download') {
+    setOpeningUploadId(upload.id)
+    try {
+      const { data, error } = await supabase.storage
+        .from('signed-documents')
+        .createSignedUrl(upload.storage_path, 3600, mode === 'download' ? { download: upload.file_name } : undefined)
+      if (error || !data) { toast.error('Could not open this document'); return }
+      window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+    } finally {
+      setOpeningUploadId(null)
+    }
   }
 
   // Best score per user per block
@@ -744,11 +800,14 @@ export function ReportsView({ employees, modules, assignments: rawAssignments, s
                             {/* Quiz attempt history */}
                             {quizAttempts.filter(qa => qa.user_id === emp.id).length > 0 && (
                               <div className="mt-3">
-                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Quiz History</p>
+                                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                                  Quiz History — every attempt, including retakes
+                                </p>
                                 <div className="overflow-x-auto">
                                   <table className="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
                                     <thead className="bg-slate-100">
                                       <tr>
+                                        <th className="text-left px-3 py-2 text-slate-600 font-medium">Training</th>
                                         <th className="text-left px-3 py-2 text-slate-600 font-medium">Date</th>
                                         <th className="text-center px-3 py-2 text-slate-600 font-medium">Score</th>
                                         <th className="text-center px-3 py-2 text-slate-600 font-medium">Result</th>
@@ -758,8 +817,10 @@ export function ReportsView({ employees, modules, assignments: rawAssignments, s
                                     <tbody className="divide-y divide-slate-100 bg-white">
                                       {quizAttempts.filter(qa => qa.user_id === emp.id).slice(0, 20).map(qa => {
                                         const pct = qa.max_score > 0 ? Math.round((qa.score / qa.max_score) * 100) : 0
+                                        const moduleTitle = moduleTitleById[contentBlockToModule[qa.content_block_id]] ?? '—'
                                         return (
                                           <tr key={qa.id}>
+                                            <td className="px-3 py-2 text-slate-700 font-medium">{moduleTitle}</td>
                                             <td className="px-3 py-2 text-slate-500">{formatDate(qa.completed_at)}</td>
                                             <td className="px-3 py-2 text-center font-medium">{qa.score}/{qa.max_score} ({pct}%)</td>
                                             <td className="px-3 py-2 text-center">
@@ -783,6 +844,75 @@ export function ReportsView({ employees, modules, assignments: rawAssignments, s
                                 </div>
                               </div>
                             )}
+
+                            {/* Signed documents — every document block flagged "require a
+                                signed copy back" across this employee's assigned modules,
+                                uploaded or still pending. */}
+                            {(() => {
+                              const required = empA.flatMap(a =>
+                                (requiredUploadBlocksByModule[a.module_id] ?? []).map(b => ({ ...b, moduleId: a.module_id }))
+                              )
+                              if (required.length === 0) return null
+                              return (
+                                <div className="mt-3">
+                                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Signed Documents</p>
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
+                                      <thead className="bg-slate-100">
+                                        <tr>
+                                          <th className="text-left px-3 py-2 text-slate-600 font-medium">Training</th>
+                                          <th className="text-left px-3 py-2 text-slate-600 font-medium">Document</th>
+                                          <th className="text-center px-3 py-2 text-slate-600 font-medium">Status</th>
+                                          <th className="text-left px-3 py-2 text-slate-600 font-medium">Uploaded</th>
+                                          <th className="text-center px-3 py-2 text-slate-600 font-medium">View</th>
+                                          <th className="text-center px-3 py-2 text-slate-600 font-medium">Download</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100 bg-white">
+                                        {required.map(({ id: blockId, label, moduleId }) => {
+                                          const upload = documentUploadByUserBlock[`${emp.id}_${blockId}`]
+                                          const isOpening = upload && openingUploadId === upload.id
+                                          return (
+                                            <tr key={blockId}>
+                                              <td className="px-3 py-2 text-slate-700 font-medium">{moduleTitleById[moduleId] ?? '—'}</td>
+                                              <td className="px-3 py-2 text-slate-600">{label}</td>
+                                              <td className="px-3 py-2 text-center">
+                                                {upload
+                                                  ? <Badge variant="success" className="text-xs gap-1"><FileCheck className="h-3 w-3" /> Uploaded</Badge>
+                                                  : <Badge variant="danger" className="text-xs gap-1"><FileClock className="h-3 w-3" /> Pending</Badge>}
+                                              </td>
+                                              <td className="px-3 py-2 text-slate-500">{upload ? formatDate(upload.uploaded_at) : '—'}</td>
+                                              <td className="px-3 py-2 text-center">
+                                                {upload ? (
+                                                  <button
+                                                    onClick={() => openSignedDocument(upload, 'view')}
+                                                    disabled={isOpening}
+                                                    className="inline-flex items-center gap-1 text-blue-600 hover:underline disabled:opacity-50"
+                                                  >
+                                                    {isOpening ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />} View
+                                                  </button>
+                                                ) : <span className="text-slate-300">—</span>}
+                                              </td>
+                                              <td className="px-3 py-2 text-center">
+                                                {upload ? (
+                                                  <button
+                                                    onClick={() => openSignedDocument(upload, 'download')}
+                                                    disabled={isOpening}
+                                                    className="inline-flex items-center gap-1 text-blue-600 hover:underline disabled:opacity-50"
+                                                  >
+                                                    <Download className="h-3.5 w-3.5" /> Download
+                                                  </button>
+                                                ) : <span className="text-slate-300">—</span>}
+                                              </td>
+                                            </tr>
+                                          )
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )
+                            })()}
                           </div>
                         </td>
                       </tr>

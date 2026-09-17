@@ -24,6 +24,8 @@ export const COMPANY_DEPARTMENTS: Record<string, string[]> = {
 
 export const COMPANIES = Object.keys(COMPANY_DEPARTMENTS)
 
+export type ModuleType = 'training' | 'checklist'
+
 export interface Module {
   id: string
   title: string
@@ -34,6 +36,10 @@ export interface Module {
   created_by: string | null
   estimated_minutes: number
   auto_assign_all: boolean
+  // 'training' = a normal lesson (text/video/quiz); 'checklist' = just a set
+  // of documents to review and sign off on (e.g. a new-hire packet) — swaps
+  // some UI terminology ("Complete Checklist" vs "Complete Training").
+  module_type: ModuleType
   created_at: string
   updated_at: string
 }
