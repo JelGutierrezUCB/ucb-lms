@@ -163,7 +163,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
             )}
           </button>
           {summaryOpen && (
-            <div className="px-6 pb-4 max-w-3xl space-y-2">
+            <div className="px-6 pb-4 space-y-2">
               <p className="text-sm text-slate-500 leading-relaxed whitespace-pre-line">{module.description}</p>
               {module.estimated_minutes > 0 && (
                 <div className="flex items-center gap-1.5 text-xs text-slate-400">
