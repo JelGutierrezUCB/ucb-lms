@@ -1,19 +1,23 @@
 'use client'
 
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   BookOpen,
+  History,
   Users,
   FolderOpen,
   Sparkles,
   UserCheck,
   GraduationCap,
   BarChart3,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
+import { useMobileNav } from '@/contexts/MobileNavContext'
 
 interface NavItem {
   href: string
@@ -33,6 +37,12 @@ const navItems: NavItem[] = [
     href: '/training',
     label: 'My Training',
     icon: <BookOpen className="h-5 w-5" />,
+    roles: ['admin', 'manager', 'employee'],
+  },
+  {
+    href: '/training-history',
+    label: 'Training History',
+    icon: <History className="h-5 w-5" />,
     roles: ['admin', 'manager', 'employee'],
   },
   {
@@ -67,7 +77,7 @@ const navItems: NavItem[] = [
   },
 ]
 
-export function Sidebar() {
+function SidebarBody() {
   const pathname = usePathname()
   const { profile } = useAuth()
 
@@ -89,7 +99,7 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {visibleItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
@@ -123,5 +133,46 @@ export function Sidebar() {
         </div>
       </div>
     </div>
+  )
+}
+
+export function Sidebar() {
+  const pathname = usePathname()
+  const { profile } = useAuth()
+  const { open, setOpen } = useMobileNav()
+
+  // Any navigation (a link tap inside the drawer, or the browser back button)
+  // closes the drawer so it never covers the page you just went to.
+  useEffect(() => {
+    setOpen(false)
+  }, [pathname, setOpen])
+
+  if (!profile) return null
+
+  return (
+    <>
+      {/* Desktop: fixed sidebar */}
+      <aside className="hidden lg:block h-full shrink-0">
+        <SidebarBody />
+      </aside>
+
+      {/* Mobile / tablet: slide-over drawer, opened from the Header hamburger */}
+      {open && (
+        <div className="lg:hidden fixed inset-0 z-40 flex" role="dialog" aria-modal="true" aria-label="Navigation menu">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
+          <div className="relative h-full max-w-[85vw]">
+            <SidebarBody />
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="absolute top-4 right-3 rounded-md p-1.5 text-slate-400 hover:text-white hover:bg-slate-800"
+              aria-label="Close menu"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   )
 }

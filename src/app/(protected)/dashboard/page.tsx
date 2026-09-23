@@ -2,11 +2,11 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { BookOpen, CheckCircle, Clock, TrendingUp, Star, Target, Award, Download } from 'lucide-react'
+import { BookOpen, CheckCircle, Clock, TrendingUp, Target, Award, Download, AlertTriangle, PlayCircle, Lightbulb } from 'lucide-react'
 import Link from 'next/link'
-import { cn, getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
+import { getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
+import { AssignedTrainings, type DashboardTraining } from '@/components/dashboard/AssignedTrainings'
 import type { Profile, Module, Assignment, Certificate } from '@/types'
 
 export default async function DashboardPage() {
@@ -39,13 +39,14 @@ export default async function DashboardPage() {
 
   const { data: sectionCounts } = await supabase
     .from('sections')
-    .select('module_id, id')
+    .select('module_id, id, title, order_index')
     .in('module_id', moduleIds.length ? moduleIds : [''])
     .eq('is_archived', false)
+    .order('order_index')
 
   const { data: completedSections } = await supabase
     .from('section_progress')
-    .select('section_id, sections!inner(module_id, is_archived)')
+    .select('section_id, completed_at, sections!inner(module_id, is_archived)')
     .eq('user_id', user.id)
     .eq('sections.is_archived', false)
 
@@ -73,39 +74,111 @@ export default async function DashboardPage() {
 
   const totalByModule: Record<string, number> = {}
   const completedByModule: Record<string, number> = {}
+  const lastActivityByModule: Record<string, string> = {}
+  const completedSectionIds = new Set<string>()
+  // Required sections per module, in course order — the first one not yet
+  // completed is where "Continue" should drop the learner.
+  const requiredSectionsInOrder = new Map<string, { id: string; title: string }[]>()
 
   for (const row of sectionCounts ?? []) {
     if (!isSectionRequired(row.module_id, row.id)) continue
     totalByModule[row.module_id] = (totalByModule[row.module_id] ?? 0) + 1
+    const list = requiredSectionsInOrder.get(row.module_id) ?? []
+    list.push({ id: row.id, title: row.title })
+    requiredSectionsInOrder.set(row.module_id, list)
   }
   for (const row of (completedSections ?? []) as any[]) {
     const moduleId = row.sections?.module_id
     if (moduleId && isSectionRequired(moduleId, row.section_id)) {
       completedByModule[moduleId] = (completedByModule[moduleId] ?? 0) + 1
+      completedSectionIds.add(row.section_id)
+      if (!lastActivityByModule[moduleId] || row.completed_at > lastActivityByModule[moduleId]) {
+        lastActivityByModule[moduleId] = row.completed_at
+      }
     }
   }
+
+  const today = new Date().toISOString().split('T')[0]
 
   const assignmentsWithProgress = [...byModule.entries()]
     .map(([moduleId, { rows }]) => {
       const dueDates = rows.map(r => r.due_date).filter(Boolean) as string[]
       const earliestDueDate = dueDates.length ? dueDates.sort()[0] : null
+      const percent = totalByModule[moduleId]
+        ? Math.round(((completedByModule[moduleId] ?? 0) / totalByModule[moduleId]) * 100)
+        : 0
+      const nextSection = (requiredSectionsInOrder.get(moduleId) ?? []).find(s => !completedSectionIds.has(s.id))
       return {
         ...rows[0],
         module_id: moduleId,
         due_date: earliestDueDate,
         completed: completedByModule[moduleId] ?? 0,
         total: totalByModule[moduleId] ?? 0,
-        percent: totalByModule[moduleId]
-          ? Math.round(((completedByModule[moduleId] ?? 0) / totalByModule[moduleId]) * 100)
-          : 0,
+        percent,
+        overdue: !!earliestDueDate && earliestDueDate < today && percent < 100,
+        lastActivity: lastActivityByModule[moduleId] ?? null,
+        nextSectionTitle: nextSection?.title ?? null,
       }
     })
-    // Required (auto-assigned-to-everyone) trainings always pin to the top
-    .sort((a, b) => Number(b.module?.auto_assign_all) - Number(a.module?.auto_assign_all))
+    // Most urgent first: overdue, then required (auto-assigned-to-everyone),
+    // then in progress, then not started (soonest due date first), finished last.
+    .sort((a, b) => {
+      const rank = (x: typeof a) =>
+        x.percent === 100 ? 4 : x.overdue ? 0 : x.module?.auto_assign_all ? 1 : x.percent > 0 ? 2 : 3
+      return rank(a) - rank(b) || (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999')
+    })
 
   const completedCount = assignmentsWithProgress.filter(a => a.percent === 100).length
   const inProgressCount = assignmentsWithProgress.filter(a => a.percent > 0 && a.percent < 100).length
   const notStartedCount = assignmentsWithProgress.filter(a => a.percent === 0).length
+  const overdueCount = assignmentsWithProgress.filter(a => a.overdue).length
+
+  // "Continue where you left off": the in-progress training touched most recently.
+  const continueItem = assignmentsWithProgress
+    .filter(a => a.percent > 0 && a.percent < 100)
+    .sort((a, b) => (b.lastActivity ?? '').localeCompare(a.lastActivity ?? ''))[0] ?? null
+
+  const dashboardTrainings: DashboardTraining[] = assignmentsWithProgress.map(a => ({
+    moduleId: a.module_id,
+    title: a.module?.title ?? 'Untitled training',
+    category: a.module?.category ?? '',
+    minutes: a.module?.estimated_minutes ?? 0,
+    dueDate: a.due_date,
+    percent: a.percent,
+    required: !!a.module?.auto_assign_all,
+    overdue: a.overdue,
+    nextSectionTitle: a.nextSectionTitle,
+  }))
+
+  // Recommended: published trainings not assigned to this employee, favoring
+  // the categories they already work in, then newest first. Only trainings
+  // that actually have content are suggested.
+  const { data: publishedModules } = await supabase
+    .from('modules')
+    .select('*')
+    .eq('is_published', true)
+    .order('created_at', { ascending: false }) as { data: Module[] | null }
+
+  const assignedIds = new Set(moduleIds)
+  const candidates = (publishedModules ?? []).filter(m => !assignedIds.has(m.id))
+  const { data: candidateSections } = await supabase
+    .from('sections')
+    .select('module_id')
+    .in('module_id', candidates.length ? candidates.map(m => m.id) : [''])
+    .eq('is_archived', false)
+  const modulesWithContent = new Set((candidateSections ?? []).map(s => s.module_id))
+
+  const categoryWeight: Record<string, number> = {}
+  for (const a of assignmentsWithProgress) {
+    const c = a.module?.category
+    if (c) categoryWeight[c] = (categoryWeight[c] ?? 0) + 1
+  }
+  const recommended = candidates
+    .filter(m => modulesWithContent.has(m.id))
+    .map((m, i) => ({ m, weight: categoryWeight[m.category] ?? 0, i }))
+    .sort((a, b) => b.weight - a.weight || a.i - b.i)
+    .slice(0, 4)
+    .map(x => x.m)
 
   // Score summary (condensed — full history lives at /score-summary)
   const { data: quizAttempts } = await supabase
@@ -130,30 +203,31 @@ export default async function DashboardPage() {
 
       <main className="flex-1 p-6 space-y-6">
         {/* Welcome banner */}
-        <div className="rounded-2xl bg-gradient-to-r from-[#241B4E] to-[#3a2d7a] p-6 text-white flex items-center gap-6">
-          <div className="bg-white rounded-xl p-3 shrink-0">
+        <div className="rounded-2xl bg-gradient-to-r from-[#241B4E] to-[#3a2d7a] p-5 sm:p-6 text-white flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+          <div className="bg-white rounded-xl p-3 shrink-0 self-start">
             <img
               src="/branding/ucb-environmental-logo.png"
               alt="UCB Environmental"
               className="h-12 w-auto"
             />
           </div>
-          <div className="border-l border-white/20 pl-6">
+          <div className="sm:border-l sm:border-white/20 sm:pl-6">
             <p className="text-xs uppercase tracking-widest text-[#7CC24A] font-semibold">UCB Training Portal</p>
             <h2 className="text-xl font-bold">Welcome back, {profile.full_name.split(' ')[0]}!</h2>
             <p className="text-sm text-white/70 mt-0.5">You're crushing it — keep that training streak alive! 🌱</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
           {[
             { label: 'Assigned', value: assignmentsWithProgress.length, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-50' },
             { label: 'Completed', value: completedCount, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50' },
             { label: 'In Progress', value: inProgressCount, icon: TrendingUp, color: 'text-amber-600', bg: 'bg-amber-50' },
             { label: 'Not Started', value: notStartedCount, icon: Clock, color: 'text-slate-500', bg: 'bg-slate-50' },
+            { label: 'Overdue', value: overdueCount, icon: AlertTriangle, color: overdueCount > 0 ? 'text-red-600' : 'text-slate-400', bg: overdueCount > 0 ? 'bg-red-50' : 'bg-slate-50' },
           ].map((stat) => (
-            <Card key={stat.label}>
-              <CardContent className="p-5">
+            <Card key={stat.label} className={stat.label === 'Overdue' ? 'col-span-2 lg:col-span-1' : undefined}>
+              <CardContent className="p-4 sm:p-5">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-slate-500">{stat.label}</p>
@@ -168,65 +242,80 @@ export default async function DashboardPage() {
           ))}
         </div>
 
+        {/* Continue where you left off */}
+        {continueItem && (
+          <Link href={`/training/${continueItem.module_id}`} className="block group">
+            <Card className="border-blue-200 bg-blue-50/40 group-hover:bg-blue-50 transition-colors">
+              <CardContent className="p-4 sm:p-5 flex items-center gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
+                  <PlayCircle className="h-6 w-6" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Continue where you left off</p>
+                  <p className="font-semibold text-slate-900 truncate">{continueItem.module?.title}</p>
+                  {continueItem.nextSectionTitle && (
+                    <p className="text-sm text-slate-500 truncate">Next up: {continueItem.nextSectionTitle}</p>
+                  )}
+                  <div className="flex items-center gap-2 mt-2">
+                    <Progress value={continueItem.percent} className="flex-1 h-1.5" />
+                    <span className="text-xs text-slate-500 shrink-0">{continueItem.percent}%</span>
+                  </div>
+                </div>
+                <span className="hidden sm:inline-flex shrink-0 items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white group-hover:bg-blue-700">
+                  Resume
+                </span>
+              </CardContent>
+            </Card>
+          </Link>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle>My Assigned Trainings</CardTitle>
           </CardHeader>
           <CardContent>
-            {assignmentsWithProgress.length === 0 ? (
-              <div className="text-center py-12">
-                <BookOpen className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 font-medium">No trainings assigned yet</p>
-                <p className="text-slate-400 text-sm mt-1">Your manager will assign trainings to you</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {assignmentsWithProgress.map((a) => (
+            <AssignedTrainings trainings={dashboardTrainings} />
+          </CardContent>
+        </Card>
+
+        {/* Recommended for you */}
+        {recommended.length > 0 && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Lightbulb className="h-5 w-5 text-amber-500" /> Recommended for you
+              </CardTitle>
+              <Link href="/training" className="text-sm text-blue-600 hover:underline">Browse all courses</Link>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {recommended.map(m => (
                   <Link
-                    key={a.id}
-                    href={`/training/${a.module_id}`}
-                    className={cn(
-                      'flex items-center gap-4 p-4 rounded-xl border transition-all group',
-                      a.module?.auto_assign_all
-                        ? 'border-amber-300 ring-1 ring-amber-300 bg-amber-50/40 hover:bg-amber-50'
-                        : 'border-slate-200 hover:border-blue-200 hover:bg-blue-50/30'
-                    )}
+                    key={m.id}
+                    href={`/training/${m.id}`}
+                    className="flex items-start gap-3 p-4 rounded-xl border border-slate-200 hover:border-blue-200 hover:bg-blue-50/30 transition-all group"
                   >
                     <div
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white font-bold text-lg"
-                      style={{ backgroundColor: getCategoryColor(a.module?.category ?? '') }}
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white font-bold"
+                      style={{ backgroundColor: getCategoryColor(m.category) }}
                     >
-                      {a.module?.title.charAt(0)}
+                      {m.title.charAt(0)}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">
-                          {a.module?.title}
-                        </p>
-                        {a.module?.auto_assign_all && (
-                          <Badge className="bg-amber-400 text-amber-950 flex items-center gap-1">
-                            <Star className="h-3 w-3 fill-current" /> Required
-                          </Badge>
-                        )}
-                        <Badge variant={a.percent === 100 ? 'success' : a.percent > 0 ? 'warning' : 'outline'}>
-                          {a.percent === 100 ? 'Complete' : a.percent > 0 ? 'In Progress' : 'Not Started'}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-slate-500 mt-0.5">
-                        {getCategoryLabel(a.module?.category ?? '')} · {a.module?.estimated_minutes} min
-                        {a.due_date && ` · Due ${formatDate(a.due_date)}`}
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">{m.title}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {getCategoryLabel(m.category)} · {m.estimated_minutes} min
                       </p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Progress value={a.percent} className="flex-1 h-1.5" />
-                        <span className="text-xs text-slate-500 shrink-0">{a.percent}%</span>
-                      </div>
+                      {m.description && (
+                        <p className="text-sm text-slate-500 line-clamp-2 mt-1">{m.description}</p>
+                      )}
                     </div>
                   </Link>
                 ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Score summary */}
         <Card>

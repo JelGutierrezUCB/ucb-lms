@@ -33,7 +33,16 @@ interface Props {
 }
 
 export function TrainingPlayer({ module, sections, userId }: Props) {
-  const [currentSectionIndex, setCurrentSectionIndex] = useState(0)
+  // Resume where the learner left off: open on the first section they haven't
+  // finished. A fully completed training opens at 0 (the certificate screen).
+  const [resumeIndex] = useState(() => {
+    const i = sections.findIndex(s => !s.is_completed)
+    return i === -1 ? 0 : i
+  })
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(resumeIndex)
+  // Section list is always visible from `md` up; on phones it collapses
+  // behind a toggle so the lesson itself gets the screen.
+  const [listOpen, setListOpen] = useState(false)
   const [completedSections, setCompletedSections] = useState<Set<string>>(
     new Set(sections.filter(s => s.is_completed).map(s => s.id))
   )
@@ -176,10 +185,10 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
         </div>
       )}
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-col md:flex-row flex-1 min-h-0">
         {/* Sidebar: section list only */}
-        <div className="w-72 shrink-0 border-r border-slate-200 bg-white flex flex-col">
-          <div className="p-5 border-b border-slate-200">
+        <div className="w-full md:w-72 shrink-0 border-b md:border-b-0 md:border-r border-slate-200 bg-white flex flex-col">
+          <div className="p-4 md:p-5 border-b border-slate-200">
             <div className="flex items-center gap-2 mb-3">
               <div
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-white text-sm font-bold"
@@ -202,9 +211,18 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
                 indicatorClassName={progressPercent === 100 ? 'bg-green-500' : undefined}
               />
             </div>
+            <button
+              type="button"
+              onClick={() => setListOpen(o => !o)}
+              className="md:hidden mt-3 w-full flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700"
+              aria-expanded={listOpen}
+            >
+              <span>Sections ({currentSectionIndex + 1} of {totalSections})</span>
+              {listOpen ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+            </button>
           </div>
 
-          <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+          <nav className={cn('flex-1 overflow-y-auto p-3 space-y-1 max-h-64 md:max-h-none', !listOpen && 'hidden md:block')}>
           {sections.map((section, i) => {
             const isComplete = completedSections.has(section.id)
             const isCurrent = i === currentSectionIndex
@@ -215,6 +233,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
                 onClick={() => {
                   if (accessible) {
                     setCurrentSectionIndex(i)
+                    setListOpen(false)
                     if (isAllComplete) setReviewMode(true)
                   } else {
                     toast.error('Complete the current training (and pass its quiz, if any) to unlock this one.')
@@ -243,7 +262,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
         {/* Main content */}
         <div className="flex-1 overflow-y-auto">
         {isAllComplete && !reviewMode ? (
-          <div className="flex flex-col items-center min-h-full p-12 text-center">
+          <div className="flex flex-col items-center min-h-full p-6 md:p-12 text-center">
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100 mb-6">
               <Trophy className="h-10 w-10 text-green-600" />
             </div>
@@ -253,7 +272,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
             <p className="text-slate-500 mb-6">
               You've completed all {totalSections} sections of <strong>{module.title}</strong>. Congratulations!
             </p>
-            <div className="flex gap-3 mb-8">
+            <div className="flex flex-wrap justify-center gap-3 mb-8">
               <a href={`/api/certificate?userId=${activeUserId}&moduleId=${module.id}`} target="_blank" rel="noopener noreferrer">
                 <Button className="gap-1.5 bg-green-700 hover:bg-green-800">
                   <Award className="h-4 w-4" /> Download Certificate
@@ -275,7 +294,12 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
             </div>
           </div>
         ) : (
-          <div className="max-w-3xl mx-auto p-8 space-y-6">
+          <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-6">
+            {resumeIndex > 0 && currentSectionIndex === resumeIndex && !completedSections.has(currentSection.id) && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-800">
+                Welcome back — picking up where you left off.
+              </div>
+            )}
             {/* Section header */}
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -347,7 +371,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
             })}
 
             {/* Navigation */}
-            <div className="flex items-center justify-between pt-6 border-t border-slate-200">
+            <div className="flex items-center justify-between gap-3 pt-6 border-t border-slate-200">
               <Button variant="outline" onClick={goPrev} disabled={currentSectionIndex === 0}>
                 <ChevronLeft className="h-4 w-4 mr-1" /> Previous
               </Button>

@@ -2,9 +2,10 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LogOut, ChevronDown, UserCog } from 'lucide-react'
+import { LogOut, ChevronDown, UserCog, Menu } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProxy } from '@/contexts/ProxyContext'
+import { useMobileNav } from '@/contexts/MobileNavContext'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +22,7 @@ export function Header({ title }: { title?: string }) {
   const { profile, signOut } = useAuth()
   const { proxyUser, endProxy } = useProxy()
   const router = useRouter()
+  const { setOpen: setMobileNavOpen } = useMobileNav()
 
   const handleSignOut = async () => {
     await signOut()
@@ -28,12 +30,20 @@ export function Header({ title }: { title?: string }) {
   }
 
   return (
-    <header className="h-16 border-b border-slate-200 bg-white px-6 flex items-center justify-between shrink-0">
-      <div>
-        {title && <h1 className="text-lg font-semibold text-slate-900">{title}</h1>}
+    <header className="h-16 border-b border-slate-200 bg-white px-4 sm:px-6 flex items-center justify-between gap-2 shrink-0">
+      <div className="flex items-center gap-2 min-w-0">
+        <button
+          type="button"
+          onClick={() => setMobileNavOpen(true)}
+          className="lg:hidden shrink-0 rounded-lg p-2 -ml-2 text-slate-600 hover:bg-slate-100"
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        {title && <h1 className="text-lg font-semibold text-slate-900 truncate">{title}</h1>}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {/* Proxy indicator */}
         {proxyUser && (
           <div className="flex items-center gap-2 rounded-full bg-amber-50 border border-amber-200 px-3 py-1.5 text-sm">
