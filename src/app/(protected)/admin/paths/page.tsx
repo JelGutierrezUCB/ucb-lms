@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { PathManager } from '@/components/admin/PathManager'
+import { isProtectedModule } from '@/lib/protected-modules'
 import { AlertTriangle } from 'lucide-react'
 import type { JobRole, LearningPath, Module, Profile } from '@/types'
 
@@ -70,7 +71,7 @@ export default async function PathBuilderPage() {
           enrollmentCounts={enrollmentCounts}
           roles={(roles ?? []) as JobRole[]}
           memberCounts={memberCounts}
-          modules={(modules ?? []) as Pick<Module, 'id' | 'title' | 'category' | 'estimated_minutes'>[]}
+          modules={((modules ?? []) as Pick<Module, 'id' | 'title' | 'category' | 'estimated_minutes'>[]).filter(m => !isProtectedModule(m.id))}
           people={((people ?? []) as Pick<Profile, 'id' | 'full_name' | 'department' | 'role' | 'job_role_id' | 'is_active'>[]).filter(p => p.is_active !== false)}
           currentUserId={user.id}
         />

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { BookOpen } from 'lucide-react'
 import { CatalogGrid, type CatalogItem } from '@/components/training/CatalogGrid'
+import { isProtectedModule } from '@/lib/protected-modules'
 import type { Module } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -110,7 +111,7 @@ export default async function TrainingPage({
       .select('*')
       .eq('is_published', true)
       .order('title')
-    availableModules = (data ?? []).filter(m => !assignedModuleIds.includes(m.id))
+    availableModules = (data ?? []).filter(m => !assignedModuleIds.includes(m.id) && !isProtectedModule(m.id))
   }
   const allModules = [...modules, ...availableModules]
 

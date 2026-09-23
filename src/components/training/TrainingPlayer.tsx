@@ -15,6 +15,7 @@ import { SlideViewer } from './SlideViewer'
 import { DocumentViewer } from './DocumentViewer'
 import { SignedDocumentUpload } from './SignedDocumentUpload'
 import { cn, getCategoryColor, getCategoryLabel } from '@/lib/utils'
+import { isProtectedModule } from '@/lib/protected-modules'
 import type { Module, ContentBlock, QuizContent, DocumentContent } from '@/types'
 import { useProxy } from '@/contexts/ProxyContext'
 
@@ -36,6 +37,8 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
   // Resume where the learner left off: open on the first section they haven't
   // finished. A fully completed training opens at 0 (the certificate screen).
   const [resumeIndex] = useState(() => {
+    // Protected courses keep their original behavior (always open on the first section).
+    if (isProtectedModule(module.id)) return 0
     const i = sections.findIndex(s => !s.is_completed)
     return i === -1 ? 0 : i
   })

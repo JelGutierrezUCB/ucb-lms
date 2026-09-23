@@ -7,6 +7,7 @@ import { BookOpen, CheckCircle, Clock, TrendingUp, Target, Award, Download, Aler
 import Link from 'next/link'
 import { getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
 import { loadUserPaths } from '@/lib/learning-paths'
+import { isProtectedModule } from '@/lib/protected-modules'
 import { AssignedTrainings, type DashboardTraining } from '@/components/dashboard/AssignedTrainings'
 import type { Profile, Module, Assignment, Certificate } from '@/types'
 
@@ -164,7 +165,7 @@ export default async function DashboardPage() {
     .order('created_at', { ascending: false }) as { data: Module[] | null }
 
   const assignedIds = new Set(moduleIds)
-  const candidates = (publishedModules ?? []).filter(m => !assignedIds.has(m.id))
+  const candidates = (publishedModules ?? []).filter(m => !assignedIds.has(m.id) && !isProtectedModule(m.id))
   const { data: candidateSections } = await supabase
     .from('sections')
     .select('module_id')
