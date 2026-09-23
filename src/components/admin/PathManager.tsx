@@ -21,7 +21,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { getCategoryLabel } from '@/lib/utils'
+import { cn, getCategoryLabel } from '@/lib/utils'
 import type { JobRole, LearningPath, LearningPathKind, Module, Profile } from '@/types'
 
 type ModuleLite = Pick<Module, 'id' | 'title' | 'category' | 'estimated_minutes'>
@@ -30,6 +30,7 @@ type PersonLite = Pick<Profile, 'id' | 'full_name' | 'department' | 'role' | 'jo
 interface Props {
   paths: LearningPath[]
   items: { path_id: string; module_id: string; order_index: number }[]
+  pathRoles: { path_id: string; job_role_id: string }[]
   enrollmentCounts: Record<string, number>
   roles: JobRole[]
   memberCounts: Record<string, number>
@@ -38,9 +39,7 @@ interface Props {
   currentUserId: string
 }
 
-const NONE = '__none__'
-
-export function PathManager({ paths, items, enrollmentCounts, roles, memberCounts, modules, people, currentUserId }: Props) {
+export function PathManager({ paths, items, pathRoles, enrollmentCounts, roles, memberCounts, modules, people, currentUserId }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [editing, setEditing] = useState<LearningPath | 'new' | null>(null)
@@ -51,6 +50,9 @@ export function PathManager({ paths, items, enrollmentCounts, roles, memberCount
 
   const itemsFor = (pathId: string) =>
     items.filter(i => i.path_id === pathId).sort((a, b) => a.order_index - b.order_index)
+
+  const roleIdsFor = (pathId: string) =>
+    pathRoles.filter(r => r.path_id === pathId).map(r => r.job_role_id)
 
   async function deletePath(path: LearningPath) {
     if (!confirm(`Delete "${path.title}"? People already enrolled keep the trainings they were assigned, but the path itself is removed.`)) return
@@ -87,7 +89,7 @@ export function PathManager({ paths, items, enrollmentCounts, roles, memberCount
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {paths.map(path => {
               const pathItems = itemsFor(path.id)
-              const role = path.job_role_id ? roleById.get(path.job_role_id) : null
+              const pathRoleNames = roleIdsFor(path.id).map(id => roleById.get(id)?.name).filter(Boolean) as string[]
               return (
                 <Card key={path.id}>
                   <CardContent className="p-5 space-y-3">
@@ -105,7 +107,7 @@ export function PathManager({ paths, items, enrollmentCounts, roles, memberCount
                       {path.kind === 'onboarding' && (
                         <Badge className="flex items-center gap-1"><Sparkles className="h-3 w-3" /> Onboarding</Badge>
                       )}
-                      {role && <Badge variant="outline">Role: {role.name}</Badge>}
+                      {pathRoleNames.map(name => <Badge key={name} variant="outline">Role: {name}</Badge>)}
                       {path.auto_enroll_new_hires && <Badge variant="warning">Auto-enrolls new hires</Badge>}
                     </div>
 
@@ -151,6 +153,7 @@ export function PathManager({ paths, items, enrollmentCounts, roles, memberCount
           key={editing === 'new' ? 'new' : editing.id}
           path={editing === 'new' ? null : editing}
           initialModuleIds={editing === 'new' ? [] : itemsFor(editing.id).map(i => i.module_id)}
+          initialRoleIds={editing === 'new' ? [] : roleIdsFor(editing.id)}
           roles={roles}
           modules={modules}
           currentUserId={currentUserId}
@@ -163,6 +166,7 @@ export function PathManager({ paths, items, enrollmentCounts, roles, memberCount
           key={enrolling.id}
           path={enrolling}
           people={people}
+          roles={roles}
           roleById={roleById}
           onClose={() => setEnrolling(null)}
         />
@@ -252,10 +256,11 @@ function JobRolesPanel({ roles, memberCounts }: { roles: JobRole[]; memberCounts
 // ---------------------------------------------------------------------------
 
 function PathEditorDialog({
-  path, initialModuleIds, roles, modules, currentUserId, onClose,
+  path, initialModuleIds, initialRoleIds, roles, modules, currentUserId, onClose,
 }: {
   path: LearningPath | null
   initialModuleIds: string[]
+  initialRoleIds: string[]
   roles: JobRole[]
   modules: ModuleLite[]
   currentUserId: string
@@ -266,7 +271,7 @@ function PathEditorDialog({
   const [title, setTitle] = useState(path?.title ?? '')
   const [description, setDescription] = useState(path?.description ?? '')
   const [kind, setKind] = useState<LearningPathKind>(path?.kind ?? 'learning')
-  const [jobRoleId, setJobRoleId] = useState<string>(path?.job_role_id ?? '')
+  const [roleIds, setRoleIds] = useState<string[]>(initialRoleIds)
   const [autoNewHires, setAutoNewHires] = useState(path?.auto_enroll_new_hires ?? false)
   const [published, setPublished] = useState(path?.is_published ?? false)
   const [moduleIds, setModuleIds] = useState<string[]>(initialModuleIds)
@@ -293,7 +298,8 @@ function PathEditorDialog({
         title: title.trim(),
         description: description.trim() || null,
         kind,
-        job_role_id: jobRoleId || null,
+        // Roles live in learning_path_roles now; the old single-role column is unused
+        job_role_id: null,
         auto_enroll_new_hires: autoNewHires,
         is_published: published,
       }
@@ -315,6 +321,16 @@ function PathEditorDialog({
           .single()
         if (error) throw error
         pathId = data.id
+      }
+
+      // Replace the set of targeted job roles
+      const { error: rolesDelError } = await supabase.from('learning_path_roles').delete().eq('path_id', pathId)
+      if (rolesDelError) throw rolesDelError
+      if (roleIds.length > 0) {
+        const { error: rolesError } = await supabase
+          .from('learning_path_roles')
+          .insert(roleIds.map(job_role_id => ({ path_id: pathId, job_role_id })))
+        if (rolesError) throw rolesError
       }
 
       if (moduleIds.length > 0) {
@@ -352,27 +368,47 @@ function PathEditorDialog({
             <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="What this path covers and who it's for" />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Type</Label>
-              <Select value={kind} onValueChange={v => setKind(v as LearningPathKind)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="learning">Learning path</SelectItem>
-                  <SelectItem value="onboarding">New-hire onboarding</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Auto-enroll by job role</Label>
-              <Select value={jobRoleId || NONE} onValueChange={v => setJobRoleId(v === NONE ? '' : v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>No one (enroll manually)</SelectItem>
-                  {roles.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1.5 sm:max-w-xs">
+            <Label>Type</Label>
+            <Select value={kind} onValueChange={v => setKind(v as LearningPathKind)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="learning">Learning path</SelectItem>
+                <SelectItem value="onboarding">New-hire onboarding</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Auto-enroll these job roles</Label>
+            {roles.length === 0 ? (
+              <p className="text-sm text-slate-400">No job roles yet — add some under &ldquo;Job roles&rdquo; below, then come back.</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {roles.map(r => {
+                    const on = roleIds.includes(r.id)
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setRoleIds(ids => on ? ids.filter(x => x !== r.id) : [...ids, r.id])}
+                        aria-pressed={on}
+                        className={cn(
+                          'rounded-full border px-3 py-1 text-sm transition-colors text-left',
+                          on ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                        )}
+                      >
+                        {r.name}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-xs text-slate-400">
+                  Select as many as you like. Everyone with any selected role is enrolled automatically; leave empty to enroll people manually.
+                </p>
+              </>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -443,10 +479,11 @@ function PathEditorDialog({
 // ---------------------------------------------------------------------------
 
 function EnrollDialog({
-  path, people, roleById, onClose,
+  path, people, roles, roleById, onClose,
 }: {
   path: LearningPath
   people: PersonLite[]
+  roles: JobRole[]
   roleById: Map<string, JobRole>
   onClose: () => void
 }) {
@@ -471,6 +508,24 @@ function EnrollDialog({
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
+      return next
+    })
+
+  // Everyone holding a given job role — used by the role quick-select chips.
+  const peopleInRole = (roleId: string) => people.filter(p => p.job_role_id === roleId).map(p => p.id)
+  const roleFullySelected = (roleId: string) => {
+    const ids = peopleInRole(roleId)
+    return ids.length > 0 && ids.every(id => selected.has(id))
+  }
+  const toggleRole = (roleId: string) =>
+    setSelected(prev => {
+      const next = new Set(prev)
+      const ids = peopleInRole(roleId)
+      const allIn = ids.length > 0 && ids.every(id => next.has(id))
+      for (const id of ids) {
+        if (allIn) next.delete(id)
+        else next.add(id)
+      }
       return next
     })
 
@@ -506,6 +561,31 @@ function EnrollDialog({
         </DialogHeader>
 
         <div className="space-y-3">
+          {roles.some(r => peopleInRole(r.id).length > 0) && (
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-slate-700">Add everyone in a job role</p>
+              <div className="flex flex-wrap gap-2">
+                {roles.filter(r => peopleInRole(r.id).length > 0).map(r => {
+                  const on = roleFullySelected(r.id)
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => toggleRole(r.id)}
+                      aria-pressed={on}
+                      className={cn(
+                        'rounded-full border px-3 py-1 text-sm transition-colors text-left',
+                        on ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                      )}
+                    >
+                      {r.name} <span className={on ? 'text-blue-100' : 'text-slate-400'}>({peopleInRole(r.id).length})</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search by name, department or job role" className="pl-9" />

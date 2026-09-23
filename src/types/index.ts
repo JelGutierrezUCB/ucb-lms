@@ -258,3 +258,11 @@ export interface LearningPathEnrollment {
   due_date: string | null
   source: 'manual' | 'role' | 'new_hire'
 }
+
+// A path can target any number of job roles; everyone holding one of them is
+// enrolled automatically. (learning_paths.job_role_id is the old single-role
+// column and is no longer used.)
+export interface LearningPathRole {
+  path_id: string
+  job_role_id: string
+}

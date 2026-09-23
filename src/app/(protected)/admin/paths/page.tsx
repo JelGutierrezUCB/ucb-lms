@@ -20,6 +20,7 @@ export default async function PathBuilderPage() {
     { data: paths, error: pathsError },
     { data: roles, error: rolesError },
     { data: items },
+    { data: pathRoles },
     { data: enrollments },
     { data: modules },
     { data: people },
@@ -27,6 +28,8 @@ export default async function PathBuilderPage() {
     supabase.from('learning_paths').select('*').order('created_at', { ascending: false }),
     supabase.from('job_roles').select('*').order('name'),
     supabase.from('learning_path_items').select('path_id, module_id, order_index').order('order_index'),
+    // Empty (not an error) until the multiple-roles migration is applied
+    supabase.from('learning_path_roles').select('path_id, job_role_id'),
     supabase.from('learning_path_enrollments').select('path_id'),
     supabase.from('modules').select('id, title, category, estimated_minutes').order('title'),
     supabase.from('profiles').select('id, full_name, department, role, job_role_id, is_active').order('full_name'),
@@ -68,6 +71,7 @@ export default async function PathBuilderPage() {
         <PathManager
           paths={(paths ?? []) as LearningPath[]}
           items={items ?? []}
+          pathRoles={pathRoles ?? []}
           enrollmentCounts={enrollmentCounts}
           roles={(roles ?? []) as JobRole[]}
           memberCounts={memberCounts}
