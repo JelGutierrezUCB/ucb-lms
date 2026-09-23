@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowDown, ArrowUp, Layers, Pencil, Plus, Search, Sparkles, Trash2, UserPlus, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, Layers, Pencil, Plus, Search, Sparkles, Trash2, UserPlus, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -272,6 +272,8 @@ function PathEditorDialog({
   const [description, setDescription] = useState(path?.description ?? '')
   const [kind, setKind] = useState<LearningPathKind>(path?.kind ?? 'learning')
   const [roleIds, setRoleIds] = useState<string[]>(initialRoleIds)
+  const [newRole, setNewRole] = useState('')
+  const [addingRole, setAddingRole] = useState(false)
   const [autoNewHires, setAutoNewHires] = useState(path?.auto_enroll_new_hires ?? false)
   const [published, setPublished] = useState(path?.is_published ?? false)
   const [moduleIds, setModuleIds] = useState<string[]>(initialModuleIds)
@@ -288,6 +290,20 @@ function PathEditorDialog({
       ;[next[index], next[target]] = [next[target], next[index]]
       return next
     })
+
+  // Create a job role without leaving the editor, and select it for this path.
+  async function addRole() {
+    const name = newRole.trim()
+    if (!name) return
+    setAddingRole(true)
+    const { data, error } = await supabase.from('job_roles').insert({ name }).select('id').single()
+    setAddingRole(false)
+    if (error) { toast.error(error.code === '23505' ? 'That job role already exists' : error.message); return }
+    setRoleIds(ids => [...ids, data.id])
+    setNewRole('')
+    toast.success(`Added "${name}"`)
+    router.refresh()
+  }
 
   async function save() {
     if (!title.trim()) { toast.error('Give the path a title'); return }
@@ -381,34 +397,43 @@ function PathEditorDialog({
 
           <div className="space-y-1.5">
             <Label>Auto-enroll these job roles</Label>
-            {roles.length === 0 ? (
-              <p className="text-sm text-slate-400">No job roles yet — add some under &ldquo;Job roles&rdquo; below, then come back.</p>
-            ) : (
-              <>
-                <div className="flex flex-wrap gap-2">
-                  {roles.map(r => {
-                    const on = roleIds.includes(r.id)
-                    return (
-                      <button
-                        key={r.id}
-                        type="button"
-                        onClick={() => setRoleIds(ids => on ? ids.filter(x => x !== r.id) : [...ids, r.id])}
-                        aria-pressed={on}
-                        className={cn(
-                          'rounded-full border px-3 py-1 text-sm transition-colors text-left',
-                          on ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-50'
-                        )}
-                      >
-                        {r.name}
-                      </button>
-                    )
-                  })}
-                </div>
-                <p className="text-xs text-slate-400">
-                  Select as many as you like. Everyone with any selected role is enrolled automatically; leave empty to enroll people manually.
-                </p>
-              </>
+            {roles.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {roles.map(r => {
+                  const on = roleIds.includes(r.id)
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => setRoleIds(ids => on ? ids.filter(x => x !== r.id) : [...ids, r.id])}
+                      aria-pressed={on}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors text-left',
+                        on ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                      )}
+                    >
+                      {on && <Check className="h-3.5 w-3.5 shrink-0" />}
+                      {r.name}
+                    </button>
+                  )
+                })}
+              </div>
             )}
+            <p className="text-xs text-slate-400">
+              {roles.length === 0
+                ? 'No job roles yet — add one below.'
+                : `${roleIds.length} selected. Tap a role to select or unselect it; everyone with any selected role is enrolled automatically. Leave none selected to enroll people manually.`}
+            </p>
+            <div className="flex gap-2 sm:max-w-sm">
+              <Input
+                value={newRole}
+                onChange={e => setNewRole(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRole() } }}
+                placeholder="Add another job role"
+                aria-label="Add another job role"
+              />
+              <Button type="button" variant="outline" onClick={addRole} loading={addingRole} className="shrink-0">Add</Button>
+            </div>
           </div>
 
           <div className="space-y-2">
