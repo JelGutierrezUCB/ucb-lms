@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
-  const { full_name, email, password, role, company, department, manager_id } = body
+  const { full_name, email, password, role, company, department, manager_id, job_role_id } = body
 
   if (!full_name || !email || !password) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -38,6 +38,9 @@ export async function POST(req: NextRequest) {
       company: company || null,
       department: department || null,
       manager_id: manager_id || null,
+      // Only included when set, so user creation keeps working on databases
+      // that haven't had the learning-paths migration applied.
+      ...(job_role_id ? { job_role_id } : {}),
     })
     .select()
     .single()

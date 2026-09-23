@@ -9,6 +9,7 @@ export interface Profile {
   department: string | null
   company: string | null
   avatar_url?: string | null
+  job_role_id?: string | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -217,3 +218,43 @@ export const MODULE_CATEGORIES = [
   { value: 'ucbzerowaste', label: 'UCBZeroWaste', color: '#15803d' },
   { value: 'general', label: 'General', color: '#1e40af' },
 ] as const
+
+export interface JobRole {
+  id: string
+  name: string
+  description: string | null
+  created_at: string
+}
+
+export type LearningPathKind = 'learning' | 'onboarding'
+
+export interface LearningPath {
+  id: string
+  title: string
+  description: string | null
+  kind: LearningPathKind
+  job_role_id: string | null
+  auto_enroll_new_hires: boolean
+  is_published: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface LearningPathItem {
+  id: string
+  path_id: string
+  module_id: string
+  order_index: number
+  module?: Module
+}
+
+export interface LearningPathEnrollment {
+  id: string
+  path_id: string
+  user_id: string
+  assigned_by: string | null
+  assigned_at: string
+  due_date: string | null
+  source: 'manual' | 'role' | 'new_hire'
+}

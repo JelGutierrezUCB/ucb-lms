@@ -3,9 +3,10 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { BookOpen, CheckCircle, Clock, TrendingUp, Target, Award, Download, AlertTriangle, PlayCircle, Lightbulb } from 'lucide-react'
+import { BookOpen, CheckCircle, Clock, TrendingUp, Target, Award, Download, AlertTriangle, PlayCircle, Lightbulb, Route } from 'lucide-react'
 import Link from 'next/link'
 import { getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
+import { loadUserPaths } from '@/lib/learning-paths'
 import { AssignedTrainings, type DashboardTraining } from '@/components/dashboard/AssignedTrainings'
 import type { Profile, Module, Assignment, Certificate } from '@/types'
 
@@ -138,6 +139,9 @@ export default async function DashboardPage() {
     .filter(a => a.percent > 0 && a.percent < 100)
     .sort((a, b) => (b.lastActivity ?? '').localeCompare(a.lastActivity ?? ''))[0] ?? null
 
+  // Learning paths (job-role / onboarding sequences). Empty until paths exist.
+  const userPaths = (await loadUserPaths(supabase, user.id)).filter(p => p.percent < 100)
+
   const dashboardTrainings: DashboardTraining[] = assignmentsWithProgress.map(a => ({
     moduleId: a.module_id,
     title: a.module?.title ?? 'Untitled training',
@@ -241,6 +245,46 @@ export default async function DashboardPage() {
             </Card>
           ))}
         </div>
+
+        {/* Learning paths in progress */}
+        {userPaths.length > 0 && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Route className="h-5 w-5 text-blue-600" /> My Learning Paths
+              </CardTitle>
+              <Link href="/paths" className="text-sm text-blue-600 hover:underline">View all</Link>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {userPaths.slice(0, 3).map(p => (
+                  <Link
+                    key={p.path.id}
+                    href="/paths"
+                    className="block rounded-xl border border-slate-200 p-4 hover:border-blue-200 hover:bg-blue-50/30 transition-all"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold text-slate-900 truncate">
+                        {p.path.kind === 'onboarding' && (
+                          <span className="mr-2 text-xs font-semibold uppercase tracking-wide text-blue-700">Onboarding</span>
+                        )}
+                        {p.path.title}
+                      </p>
+                      <span className="text-xs text-slate-500 shrink-0">{p.completedSteps}/{p.steps.length} done</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Progress value={p.percent} className="flex-1 h-1.5" />
+                      <span className="text-xs text-slate-500 shrink-0">{p.percent}%</span>
+                    </div>
+                    {p.nextStep && (
+                      <p className="text-sm text-slate-500 mt-2 truncate">Next: {p.nextStep.module.title}</p>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Continue where you left off */}
         {continueItem && (

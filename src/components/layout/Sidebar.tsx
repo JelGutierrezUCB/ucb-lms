@@ -7,6 +7,8 @@ import {
   LayoutDashboard,
   BookOpen,
   History,
+  Route,
+  Layers,
   Users,
   FolderOpen,
   Sparkles,
@@ -40,6 +42,12 @@ const navItems: NavItem[] = [
     roles: ['admin', 'manager', 'employee'],
   },
   {
+    href: '/paths',
+    label: 'Learning Paths',
+    icon: <Route className="h-5 w-5" />,
+    roles: ['admin', 'manager', 'employee'],
+  },
+  {
     href: '/training-history',
     label: 'Training History',
     icon: <History className="h-5 w-5" />,
@@ -55,6 +63,12 @@ const navItems: NavItem[] = [
     href: '/admin/modules',
     label: 'Training Modules',
     icon: <FolderOpen className="h-5 w-5" />,
+    roles: ['admin'],
+  },
+  {
+    href: '/admin/paths',
+    label: 'Path Builder',
+    icon: <Layers className="h-5 w-5" />,
     roles: ['admin'],
   },
   {

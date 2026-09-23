@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { UserManagement } from '@/components/admin/UserManagement'
-import type { Profile } from '@/types'
+import type { JobRole, Profile } from '@/types'
 
 export default async function UsersPage() {
   const supabase = await createClient()
@@ -17,6 +17,10 @@ export default async function UsersPage() {
     .select('*')
     .order('full_name') as { data: Profile[] | null }
 
+  // Job roles come from the learning-paths migration; if the table isn't
+  // there yet this is just empty and the Job Role field stays hidden.
+  const { data: jobRoles } = await supabase.from('job_roles').select('*').order('name')
+
   return (
     <div className="flex flex-col flex-1 overflow-auto">
       <Header title="User Management" />
@@ -25,6 +29,7 @@ export default async function UsersPage() {
           initialProfiles={profiles ?? []}
           currentUserRole={profile?.role ?? 'employee'}
           currentUserId={user.id}
+          jobRoles={(jobRoles ?? []) as JobRole[]}
         />
       </main>
     </div>

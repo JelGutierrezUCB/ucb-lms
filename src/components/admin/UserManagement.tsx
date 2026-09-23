@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { Profile, Role } from '@/types'
+import type { JobRole, Profile, Role } from '@/types'
 import { COMPANIES, COMPANY_DEPARTMENTS } from '@/types'
 import { getRoleLabel, formatDate } from '@/lib/utils'
 import { CsvImportDialog } from './CsvImportDialog'
@@ -28,12 +28,15 @@ interface Props {
   initialProfiles: Profile[]
   currentUserRole: string
   currentUserId: string
+  // Empty until the learning-paths migration is applied and roles are created;
+  // the Job Role field is hidden (and never sent) while it's empty.
+  jobRoles?: JobRole[]
 }
 
 const roleBadgeVariant = (role: string) =>
   role === 'admin' ? 'default' : role === 'manager' ? 'warning' : 'outline'
 
-export function UserManagement({ initialProfiles, currentUserRole, currentUserId }: Props) {
+export function UserManagement({ initialProfiles, currentUserRole, currentUserId, jobRoles = [] }: Props) {
   const [profiles, setProfiles] = useState(initialProfiles)
   const [search, setSearch] = useState('')
   const [filterCompany, setFilterCompany] = useState('all')
@@ -55,6 +58,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
     company: '',
     department: '',
     manager_id: '',
+    job_role_id: '',
     is_active: true,
   })
 
@@ -79,7 +83,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
   const inactiveCount = profiles.filter(p => p.is_active === false).length
 
   const resetForm = () => setForm({
-    full_name: '', email: '', password: '', role: 'employee', company: '', department: '', manager_id: '', is_active: true,
+    full_name: '', email: '', password: '', role: 'employee', company: '', department: '', manager_id: '', job_role_id: '', is_active: true,
   })
 
   const handleCreate = async () => {
@@ -121,6 +125,8 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
           department: form.department || null,
           manager_id: form.manager_id || null,
           is_active: form.is_active,
+          // Only sent once job roles exist (i.e. the column does)
+          ...(jobRoles.length > 0 ? { job_role_id: form.job_role_id || null } : {}),
         })
         .eq('id', editUser.id)
         .select()
@@ -190,6 +196,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
       company: user.company ?? '',
       department: user.department ?? '',
       manager_id: user.manager_id ?? '',
+      job_role_id: user.job_role_id ?? '',
       is_active: user.is_active !== false,
     })
     setEditUser(user)
@@ -451,6 +458,24 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                 </SelectContent>
               </Select>
             </div>
+            {jobRoles.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>Job role (optional)</Label>
+                <Select
+                  value={form.job_role_id || '__none__'}
+                  onValueChange={v => setForm(f => ({ ...f, job_role_id: v === '__none__' ? '' : v }))}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select a job role" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No job role</SelectItem>
+                    {jobRoles.map(r => (
+                      <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-400">Learning paths set for this role are assigned automatically.</p>
+              </div>
+            )}
             {form.role === 'employee' && (
               <div className="space-y-1.5">
                 <Label>Manager (optional)</Label>
