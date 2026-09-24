@@ -53,7 +53,7 @@ const HEADER_MAP: Record<string, keyof ParsedRow> = {
   position: 'job_role',
 }
 
-const SAMPLE_CSV = 'full_name,email,role,job_role,company,department,supervisor_email\nJane Smith,jane@ucb.com,employee,Communications and People Development Specialist,UCBEnvironmental,Human Resources,manager@ucb.com\n'
+const SAMPLE_CSV = 'full_name,email,role,job_role,company,department,manager_email\nJane Smith,jane@ucb.com,employee,Communications and People Development Specialist,UCBEnvironmental,Human Resources,manager@ucb.com\n'
 
 export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
   const [rows, setRows] = useState<ParsedRow[]>([])
@@ -140,7 +140,7 @@ export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
         <DialogHeader>
           <DialogTitle>Bulk Import Users from CSV</DialogTitle>
           <DialogDescription>
-            Columns: full_name, email, role (admin/manager/employee), job_role, company, department, supervisor_email (all optional except name and email).
+            Columns: full_name, email, role (admin/manager/employee), job_role, company, department, manager_email (all optional except name and email).
             New job roles are created automatically. Each user gets a generated password emailed to them, and is enrolled in any learning paths they match.
           </DialogDescription>
         </DialogHeader>
@@ -187,7 +187,7 @@ export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Job role</th>
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Company</th>
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Department</th>
-                          <th className="text-left px-3 py-2 font-medium text-slate-600">Supervisor Email</th>
+                          <th className="text-left px-3 py-2 font-medium text-slate-600">Manager Email</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">

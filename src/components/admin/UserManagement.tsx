@@ -298,7 +298,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Job role</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Company</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Department</th>
-                <th className="text-left px-4 py-3 text-slate-600 font-medium">Supervisor</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Manager</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Joined</th>
                 {currentUserRole === 'admin' && (
                   <th className="text-right px-4 py-3 text-slate-600 font-medium">Actions</th>
@@ -504,18 +504,18 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                 <Button type="button" variant="outline" onClick={addJobRole} loading={addingRole} className="shrink-0">Add</Button>
               </div>
               <p className="text-xs text-slate-400">
-                Job roles are managed here. Learning paths use these details (job role, company, department, supervisor and account type) and enroll matching people automatically.
+                Job roles are managed here. Learning paths use these details (job role, company, department, manager and account type) and enroll matching people automatically.
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label>Supervisor (optional)</Label>
+              <Label>Manager (optional)</Label>
               <Select
                 value={form.manager_id || '__none__'}
                 onValueChange={v => setForm(f => ({ ...f, manager_id: v === '__none__' ? '' : v }))}
               >
-                <SelectTrigger><SelectValue placeholder="Assign a supervisor" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Assign a manager" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">No supervisor</SelectItem>
+                  <SelectItem value="__none__">No manager</SelectItem>
                   {managers.filter(m => m.id !== editUser?.id).map(m => (
                     <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
                   ))}

@@ -153,7 +153,7 @@ export function PathManager({ paths, items, pathTargets, enrollmentCounts, roles
                       )}
                       {targets.map(t => (
                         <Badge key={`${t.kind}:${t.value}`} variant="outline">
-                          {{ company: 'Company', department: 'Dept', job_role: 'Role', supervisor: 'Team of', account_role: 'Type' }[t.kind]}:{' '}
+                          {{ company: 'Company', department: 'Dept', job_role: 'Role', supervisor: 'Manager', account_role: 'Type' }[t.kind]}:{' '}
                           {t.kind === 'job_role'
                             ? roleById.get(t.value)?.name ?? 'Unknown role'
                             : t.kind === 'supervisor'
@@ -411,7 +411,7 @@ function PathEditorDialog({
             <div>
               <Label>Who gets this path automatically</Label>
               <p className="text-xs text-slate-400 mt-0.5">
-                Based on each person&apos;s details in Users: Company, Department, Job role, Supervisor and Account type. This
+                Based on each person&apos;s details in Users: Company, Department, Job role, Manager and Account type. This
                 stays in sync as you edit users. A person needs to match every group you fill in (any one choice within a group
                 counts). Leave all empty to enroll people manually.
               </p>
@@ -449,9 +449,9 @@ function PathEditorDialog({
             </div>
 
             <div className="space-y-1.5">
-              <p className="text-sm font-medium text-slate-700">Supervisor (their team)</p>
+              <p className="text-sm font-medium text-slate-700">Manager (their team)</p>
               {supervisorOptions.length === 0 ? (
-                <p className="text-xs text-slate-400">No supervisors yet — set a supervisor on a user in the Users page.</p>
+                <p className="text-xs text-slate-400">No managers assigned yet — set a manager on a user in the Users page.</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {supervisorOptions.map(s => (
@@ -594,7 +594,7 @@ function EnrollDialog({
       by('Company', p => p.company),
       by('Department', p => p.department),
       by('Job role', p => (p.job_role_id ? roleById.get(p.job_role_id)?.name : null)),
-      by('Supervisor', p => (p.manager_id ? people.find(x => x.id === p.manager_id)?.full_name : null)),
+      by('Manager', p => (p.manager_id ? people.find(x => x.id === p.manager_id)?.full_name : null)),
     ].filter(g => g.entries.length > 0)
   }, [people, roleById])
 
@@ -645,7 +645,7 @@ function EnrollDialog({
           {groups.map(g => (
             <div key={g.label} className="space-y-1.5">
               <p className="text-sm font-medium text-slate-700">
-                {g.label === 'Supervisor' ? "Add a supervisor's whole team" : `Add everyone in a ${g.label.toLowerCase()}`}
+                {g.label === 'Manager' ? "Add a manager's whole team" : `Add everyone in a ${g.label.toLowerCase()}`}
               </p>
               <div className="flex flex-wrap gap-2">
                 {g.entries.map(([name, ids]) => (
