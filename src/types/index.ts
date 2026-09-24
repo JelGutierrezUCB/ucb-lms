@@ -157,6 +157,10 @@ export interface Assignment {
   assigned_by: string
   assigned_at: string
   due_date: string | null
+  // false = optional training: shown to the person but never counts as overdue
+  required?: boolean
+  // the assignment rule that created this assignment, if any
+  source_rule_id?: string | null
   module?: Module
   section?: Section
   user?: Profile
@@ -290,4 +294,28 @@ export interface JourneyCertificate {
   courses_count: number
   completed_at: string
   issued_at: string
+}
+
+// An assignment rule: one course + an audience + required/optional + a due
+// date policy. People who match are assigned the course automatically.
+export type CourseRuleTargetKind = 'company' | 'department' | 'job_role' | 'supervisor' | 'account_role' | 'person'
+
+export interface CourseRule {
+  id: string
+  module_id: string
+  requirement: 'required' | 'optional'
+  due_mode: 'none' | 'fixed' | 'relative'
+  due_date: string | null // fixed date, when due_mode = 'fixed'
+  due_days: number | null // days after assignment, when due_mode = 'relative'
+  auto_enroll_new_hires: boolean
+  is_active: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CourseRuleTarget {
+  rule_id: string
+  kind: CourseRuleTargetKind
+  value: string
 }

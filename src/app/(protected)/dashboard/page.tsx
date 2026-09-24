@@ -112,6 +112,8 @@ export default async function DashboardPage() {
         ? Math.round(((completedByModule[moduleId] ?? 0) / totalByModule[moduleId]) * 100)
         : 0
       const nextSection = (requiredSectionsInOrder.get(moduleId) ?? []).find(s => !completedSectionIds.has(s.id))
+      // Optional when every assignment for it is optional (set by an assignment rule)
+      const optional = rows.every(r => r.required === false)
       return {
         ...rows[0],
         module_id: moduleId,
@@ -119,7 +121,8 @@ export default async function DashboardPage() {
         completed: completedByModule[moduleId] ?? 0,
         total: totalByModule[moduleId] ?? 0,
         percent,
-        overdue: !!earliestDueDate && earliestDueDate < today && percent < 100,
+        optional,
+        overdue: !optional && !!earliestDueDate && earliestDueDate < today && percent < 100,
         lastActivity: lastActivityByModule[moduleId] ?? null,
         nextSectionTitle: nextSection?.title ?? null,
       }
@@ -128,7 +131,7 @@ export default async function DashboardPage() {
     // then in progress, then not started (soonest due date first), finished last.
     .sort((a, b) => {
       const rank = (x: typeof a) =>
-        x.percent === 100 ? 4 : x.overdue ? 0 : x.module?.auto_assign_all ? 1 : x.percent > 0 ? 2 : 3
+        x.percent === 100 ? 4 : x.overdue ? 0 : x.module?.auto_assign_all ? 1 : x.percent > 0 ? 2 : x.optional ? 3.5 : 3
       return rank(a) - rank(b) || (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999')
     })
 
@@ -153,7 +156,7 @@ export default async function DashboardPage() {
     .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''))[0]
   const onboardingJourney = userPaths.find(p => p.path.kind === 'onboarding' && p.nextStep)
   const otherJourney = userPaths.find(p => p.path.kind !== 'onboarding' && p.nextStep)
-  const notStartedItem = assignmentsWithProgress.find(a => a.percent === 0)
+  const notStartedItem = assignmentsWithProgress.find(a => a.percent === 0 && !a.optional)
 
   const stepOf = (p: (typeof userPaths)[number]) => `${p.path.title} · step ${p.completedSteps + 1} of ${p.steps.length}`
   const minutesText = (m?: number | null) => (m ? `About ${m} min` : undefined)
@@ -219,6 +222,7 @@ export default async function DashboardPage() {
     dueDate: a.due_date,
     percent: a.percent,
     required: !!a.module?.auto_assign_all,
+    optional: a.optional,
     overdue: a.overdue,
     nextSectionTitle: a.nextSectionTitle,
   }))

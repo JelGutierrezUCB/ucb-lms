@@ -16,6 +16,8 @@ export interface DashboardTraining {
   dueDate: string | null
   percent: number
   required: boolean
+  // Optional training (set by an assignment rule): never counts as overdue
+  optional: boolean
   overdue: boolean
   // Title of the first unfinished training in the module, for in-progress items.
   nextSectionTitle: string | null
@@ -143,6 +145,7 @@ export function AssignedTrainings({ trainings }: { trainings: DashboardTraining[
                       <Star className="h-3 w-3 fill-current" /> Required
                     </Badge>
                   )}
+                  {t.optional && <Badge variant="outline">Optional</Badge>}
                   <Badge variant={t.percent === 100 ? 'success' : t.percent > 0 ? 'warning' : 'outline'}>
                     {t.percent === 100 ? 'Complete' : t.percent > 0 ? 'In Progress' : 'Not Started'}
                   </Badge>

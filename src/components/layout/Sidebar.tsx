@@ -9,6 +9,7 @@ import {
   History,
   Route,
   Layers,
+  ListChecks,
   Users,
   FolderOpen,
   Sparkles,
@@ -63,6 +64,12 @@ const navItems: NavItem[] = [
     href: '/admin/modules',
     label: 'Training Modules',
     icon: <FolderOpen className="h-5 w-5" />,
+    roles: ['admin'],
+  },
+  {
+    href: '/admin/rules',
+    label: 'Assignment Rules',
+    icon: <ListChecks className="h-5 w-5" />,
     roles: ['admin'],
   },
   {
