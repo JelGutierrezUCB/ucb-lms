@@ -22,24 +22,53 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { cn, getCategoryLabel } from '@/lib/utils'
-import type { JobRole, LearningPath, LearningPathKind, Module, Profile } from '@/types'
+import { COMPANIES, COMPANY_DEPARTMENTS } from '@/types'
+import type { JobRole, LearningPath, LearningPathKind, LearningPathTarget, Module, Profile } from '@/types'
 
 type ModuleLite = Pick<Module, 'id' | 'title' | 'category' | 'estimated_minutes'>
-type PersonLite = Pick<Profile, 'id' | 'full_name' | 'department' | 'role' | 'job_role_id' | 'is_active'>
+type PersonLite = Pick<Profile, 'id' | 'full_name' | 'department' | 'company' | 'role' | 'job_role_id' | 'is_active'>
 
 interface Props {
   paths: LearningPath[]
   items: { path_id: string; module_id: string; order_index: number }[]
-  pathRoles: { path_id: string; job_role_id: string }[]
+  pathTargets: LearningPathTarget[]
   enrollmentCounts: Record<string, number>
+  // Job roles come from the Users section (created on the user form)
   roles: JobRole[]
-  memberCounts: Record<string, number>
   modules: ModuleLite[]
   people: PersonLite[]
   currentUserId: string
 }
 
-export function PathManager({ paths, items, pathRoles, enrollmentCounts, roles, memberCounts, modules, people, currentUserId }: Props) {
+// Same rule the database uses: every kind of filter that has a selection must
+// match (any one value within a kind); no filters at all matches nobody.
+function matchesAudience(p: PersonLite, companies: string[], departments: string[], roleIds: string[]) {
+  if (!companies.length && !departments.length && !roleIds.length) return false
+  return (
+    (!companies.length || (p.company != null && companies.includes(p.company))) &&
+    (!departments.length || (p.department != null && departments.includes(p.department))) &&
+    (!roleIds.length || (p.job_role_id != null && roleIds.includes(p.job_role_id)))
+  )
+}
+
+function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors text-left',
+        on ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+      )}
+    >
+      {on && <Check className="h-3.5 w-3.5 shrink-0" />}
+      {children}
+    </button>
+  )
+}
+
+export function PathManager({ paths, items, pathTargets, enrollmentCounts, roles, modules, people, currentUserId }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [editing, setEditing] = useState<LearningPath | 'new' | null>(null)
@@ -51,8 +80,7 @@ export function PathManager({ paths, items, pathRoles, enrollmentCounts, roles, 
   const itemsFor = (pathId: string) =>
     items.filter(i => i.path_id === pathId).sort((a, b) => a.order_index - b.order_index)
 
-  const roleIdsFor = (pathId: string) =>
-    pathRoles.filter(r => r.path_id === pathId).map(r => r.job_role_id)
+  const targetsFor = (pathId: string) => pathTargets.filter(t => t.path_id === pathId)
 
   async function deletePath(path: LearningPath) {
     if (!confirm(`Delete "${path.title}"? People already enrolled keep the trainings they were assigned, but the path itself is removed.`)) return
@@ -64,14 +92,13 @@ export function PathManager({ paths, items, pathRoles, enrollmentCounts, roles, 
 
   return (
     <div className="space-y-8">
-      {/* Learning paths */}
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Learning paths</h2>
             <p className="text-sm text-slate-500">
-              An ordered set of trainings. Enrolling someone assigns every training in it. Paths can enroll people
-              automatically by job role, or every new hire.
+              An ordered set of trainings. Enrolling someone assigns every training in it. A path can enroll people
+              automatically by the Company, Department and Job role set on their user record, or every new hire.
             </p>
           </div>
           <Button onClick={() => setEditing('new')} className="shrink-0">
@@ -83,13 +110,13 @@ export function PathManager({ paths, items, pathRoles, enrollmentCounts, roles, 
           <div className="text-center py-14 rounded-xl border border-dashed border-slate-300 bg-white">
             <Layers className="h-10 w-10 text-slate-300 mx-auto mb-2" />
             <p className="text-slate-500 font-medium">No learning paths yet</p>
-            <p className="text-slate-400 text-sm mt-1">Create one for a job role, or an onboarding path for new hires.</p>
+            <p className="text-slate-400 text-sm mt-1">Create one for a company, department or job role, or an onboarding path for new hires.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {paths.map(path => {
               const pathItems = itemsFor(path.id)
-              const pathRoleNames = roleIdsFor(path.id).map(id => roleById.get(id)?.name).filter(Boolean) as string[]
+              const targets = targetsFor(path.id)
               return (
                 <Card key={path.id}>
                   <CardContent className="p-5 space-y-3">
@@ -107,7 +134,12 @@ export function PathManager({ paths, items, pathRoles, enrollmentCounts, roles, 
                       {path.kind === 'onboarding' && (
                         <Badge className="flex items-center gap-1"><Sparkles className="h-3 w-3" /> Onboarding</Badge>
                       )}
-                      {pathRoleNames.map(name => <Badge key={name} variant="outline">Role: {name}</Badge>)}
+                      {targets.map(t => (
+                        <Badge key={`${t.kind}:${t.value}`} variant="outline">
+                          {t.kind === 'company' ? 'Company' : t.kind === 'department' ? 'Dept' : 'Role'}:{' '}
+                          {t.kind === 'job_role' ? roleById.get(t.value)?.name ?? 'Unknown role' : t.value}
+                        </Badge>
+                      ))}
                       {path.auto_enroll_new_hires && <Badge variant="warning">Auto-enrolls new hires</Badge>}
                     </div>
 
@@ -146,16 +178,15 @@ export function PathManager({ paths, items, pathRoles, enrollmentCounts, roles, 
         )}
       </section>
 
-      <JobRolesPanel roles={roles} memberCounts={memberCounts} />
-
       {editing && (
         <PathEditorDialog
           key={editing === 'new' ? 'new' : editing.id}
           path={editing === 'new' ? null : editing}
           initialModuleIds={editing === 'new' ? [] : itemsFor(editing.id).map(i => i.module_id)}
-          initialRoleIds={editing === 'new' ? [] : roleIdsFor(editing.id)}
+          initialTargets={editing === 'new' ? [] : targetsFor(editing.id)}
           roles={roles}
           modules={modules}
+          people={people}
           currentUserId={currentUserId}
           onClose={() => setEditing(null)}
         />
@@ -166,7 +197,6 @@ export function PathManager({ paths, items, pathRoles, enrollmentCounts, roles, 
           key={enrolling.id}
           path={enrolling}
           people={people}
-          roles={roles}
           roleById={roleById}
           onClose={() => setEnrolling(null)}
         />
@@ -177,92 +207,15 @@ export function PathManager({ paths, items, pathRoles, enrollmentCounts, roles, 
 
 // ---------------------------------------------------------------------------
 
-function JobRolesPanel({ roles, memberCounts }: { roles: JobRole[]; memberCounts: Record<string, number> }) {
-  const router = useRouter()
-  const supabase = createClient()
-  const [name, setName] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  async function addRole() {
-    const trimmed = name.trim()
-    if (!trimmed) return
-    setSaving(true)
-    const { error } = await supabase.from('job_roles').insert({ name: trimmed })
-    setSaving(false)
-    if (error) { toast.error(error.code === '23505' ? 'That job role already exists' : error.message); return }
-    setName('')
-    toast.success(`Added "${trimmed}"`)
-    router.refresh()
-  }
-
-  async function deleteRole(role: JobRole) {
-    const members = memberCounts[role.id] ?? 0
-    const msg = members > 0
-      ? `Delete "${role.name}"? ${members} user${members === 1 ? '' : 's'} will be left with no job role.`
-      : `Delete "${role.name}"?`
-    if (!confirm(msg)) return
-    const { error } = await supabase.from('job_roles').delete().eq('id', role.id)
-    if (error) { toast.error(error.message); return }
-    toast.success('Job role deleted')
-    router.refresh()
-  }
-
-  return (
-    <section className="space-y-3">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">Job roles</h2>
-        <p className="text-sm text-slate-500">
-          Assign a job role to each user (Users page). Paths targeted at a role enroll everyone with that role.
-        </p>
-      </div>
-      <Card>
-        <CardContent className="p-5 space-y-4">
-          <div className="flex gap-2 max-w-md">
-            <Input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') addRole() }}
-              placeholder="e.g. Forklift Operator, Account Manager"
-              aria-label="New job role name"
-            />
-            <Button onClick={addRole} loading={saving} className="shrink-0">Add role</Button>
-          </div>
-          {roles.length === 0 ? (
-            <p className="text-sm text-slate-400">No job roles yet.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {roles.map(role => (
-                <span key={role.id} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 pl-3 pr-1.5 py-1 text-sm text-slate-700">
-                  {role.name}
-                  <span className="text-xs text-slate-400">{memberCounts[role.id] ?? 0}</span>
-                  <button
-                    type="button"
-                    onClick={() => deleteRole(role)}
-                    className="rounded-full p-0.5 text-slate-400 hover:bg-red-100 hover:text-red-600"
-                    aria-label={`Delete ${role.name}`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </section>
-  )
-}
-
-// ---------------------------------------------------------------------------
-
 function PathEditorDialog({
-  path, initialModuleIds, initialRoleIds, roles, modules, currentUserId, onClose,
+  path, initialModuleIds, initialTargets, roles, modules, people, currentUserId, onClose,
 }: {
   path: LearningPath | null
   initialModuleIds: string[]
-  initialRoleIds: string[]
+  initialTargets: LearningPathTarget[]
   roles: JobRole[]
   modules: ModuleLite[]
+  people: PersonLite[]
   currentUserId: string
   onClose: () => void
 }) {
@@ -271,9 +224,9 @@ function PathEditorDialog({
   const [title, setTitle] = useState(path?.title ?? '')
   const [description, setDescription] = useState(path?.description ?? '')
   const [kind, setKind] = useState<LearningPathKind>(path?.kind ?? 'learning')
-  const [roleIds, setRoleIds] = useState<string[]>(initialRoleIds)
-  const [newRole, setNewRole] = useState('')
-  const [addingRole, setAddingRole] = useState(false)
+  const [companies, setCompanies] = useState<string[]>(initialTargets.filter(t => t.kind === 'company').map(t => t.value))
+  const [departments, setDepartments] = useState<string[]>(initialTargets.filter(t => t.kind === 'department').map(t => t.value))
+  const [roleIds, setRoleIds] = useState<string[]>(initialTargets.filter(t => t.kind === 'job_role').map(t => t.value))
   const [autoNewHires, setAutoNewHires] = useState(path?.auto_enroll_new_hires ?? false)
   const [published, setPublished] = useState(path?.is_published ?? false)
   const [moduleIds, setModuleIds] = useState<string[]>(initialModuleIds)
@@ -281,6 +234,28 @@ function PathEditorDialog({
 
   const moduleById = useMemo(() => new Map(modules.map(m => [m.id, m])), [modules])
   const available = modules.filter(m => !moduleIds.includes(m.id))
+
+  // Company / department choices are the ones users can be given (plus any
+  // already in use), taken from the user records rather than a separate list.
+  const companyOptions = useMemo(
+    () => [...new Set([...COMPANIES, ...people.map(p => p.company).filter((c): c is string => !!c)])].sort(),
+    [people]
+  )
+  const departmentOptions = useMemo(() => {
+    const inScope = (c: string | null | undefined) => companies.length === 0 || (!!c && companies.includes(c))
+    const configured = (companies.length ? companies : Object.keys(COMPANY_DEPARTMENTS)).flatMap(c => COMPANY_DEPARTMENTS[c] ?? [])
+    const inUse = people.filter(p => inScope(p.company)).map(p => p.department).filter((d): d is string => !!d)
+    return [...new Set([...configured, ...inUse, ...departments])].sort()
+  }, [companies, departments, people])
+
+  const toggle = (list: string[], setList: (v: string[]) => void, value: string) =>
+    setList(list.includes(value) ? list.filter(v => v !== value) : [...list, value])
+
+  const hasFilters = companies.length + departments.length + roleIds.length > 0
+  const matchCount = useMemo(
+    () => people.filter(p => matchesAudience(p, companies, departments, roleIds)).length,
+    [people, companies, departments, roleIds]
+  )
 
   const move = (index: number, delta: number) =>
     setModuleIds(ids => {
@@ -291,20 +266,6 @@ function PathEditorDialog({
       return next
     })
 
-  // Create a job role without leaving the editor, and select it for this path.
-  async function addRole() {
-    const name = newRole.trim()
-    if (!name) return
-    setAddingRole(true)
-    const { data, error } = await supabase.from('job_roles').insert({ name }).select('id').single()
-    setAddingRole(false)
-    if (error) { toast.error(error.code === '23505' ? 'That job role already exists' : error.message); return }
-    setRoleIds(ids => [...ids, data.id])
-    setNewRole('')
-    toast.success(`Added "${name}"`)
-    router.refresh()
-  }
-
   async function save() {
     if (!title.trim()) { toast.error('Give the path a title'); return }
     if (published && moduleIds.length === 0) { toast.error('Add at least one training before publishing'); return }
@@ -314,7 +275,7 @@ function PathEditorDialog({
         title: title.trim(),
         description: description.trim() || null,
         kind,
-        // Roles live in learning_path_roles now; the old single-role column is unused
+        // Audience lives in learning_path_targets; the old single-role column is unused
         job_role_id: null,
         auto_enroll_new_hires: autoNewHires,
         is_published: published,
@@ -339,14 +300,17 @@ function PathEditorDialog({
         pathId = data.id
       }
 
-      // Replace the set of targeted job roles
-      const { error: rolesDelError } = await supabase.from('learning_path_roles').delete().eq('path_id', pathId)
-      if (rolesDelError) throw rolesDelError
-      if (roleIds.length > 0) {
-        const { error: rolesError } = await supabase
-          .from('learning_path_roles')
-          .insert(roleIds.map(job_role_id => ({ path_id: pathId, job_role_id })))
-        if (rolesError) throw rolesError
+      // Replace the audience filters
+      const { error: targetsDelError } = await supabase.from('learning_path_targets').delete().eq('path_id', pathId)
+      if (targetsDelError) throw targetsDelError
+      const targetRows = [
+        ...companies.map(value => ({ path_id: pathId, kind: 'company', value })),
+        ...departments.map(value => ({ path_id: pathId, kind: 'department', value })),
+        ...roleIds.map(value => ({ path_id: pathId, kind: 'job_role', value })),
+      ]
+      if (targetRows.length > 0) {
+        const { error: targetsError } = await supabase.from('learning_path_targets').insert(targetRows)
+        if (targetsError) throw targetsError
       }
 
       if (moduleIds.length > 0) {
@@ -356,7 +320,19 @@ function PathEditorDialog({
         if (error) throw error
       }
 
-      toast.success(path ? 'Learning path saved' : 'Learning path created')
+      // Apply the audience once everything above is saved (never per filter,
+      // so a half-saved set of filters can't over-enroll anyone).
+      let enrolled = 0
+      if (published && hasFilters) {
+        const { data, error } = await supabase.rpc('sync_learning_path', { p_path: pathId })
+        if (error) throw error
+        enrolled = (data as number) ?? 0
+      }
+
+      toast.success(
+        path ? 'Learning path saved' : 'Learning path created',
+        enrolled > 0 ? { description: `${enrolled} matching ${enrolled === 1 ? 'person is' : 'people are'} enrolled.` } : undefined
+      )
       onClose()
       router.refresh()
     } catch (err: any) {
@@ -395,51 +371,58 @@ function PathEditorDialog({
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Auto-enroll these job roles</Label>
-            {roles.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {roles.map(r => {
-                  const on = roleIds.includes(r.id)
-                  return (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => setRoleIds(ids => on ? ids.filter(x => x !== r.id) : [...ids, r.id])}
-                      aria-pressed={on}
-                      className={cn(
-                        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors text-left',
-                        on ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-50'
-                      )}
-                    >
-                      {on && <Check className="h-3.5 w-3.5 shrink-0" />}
-                      {r.name}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-            <p className="text-xs text-slate-400">
-              {roles.length === 0
-                ? 'No job roles yet — add one below.'
-                : `${roleIds.length} selected. Tap a role to select or unselect it; everyone with any selected role is enrolled automatically. Leave none selected to enroll people manually.`}
-            </p>
-            <div className="flex gap-2 sm:max-w-sm">
-              <Input
-                value={newRole}
-                onChange={e => setNewRole(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRole() } }}
-                placeholder="Add another job role"
-                aria-label="Add another job role"
-              />
-              <Button type="button" variant="outline" onClick={addRole} loading={addingRole} className="shrink-0">Add</Button>
+          {/* Audience — taken from the Users section */}
+          <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+            <div>
+              <Label>Who gets this path automatically</Label>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Based on each person&apos;s Company, Department and Job role in Users. Pick any values; a person needs to match
+                every group you fill in (any one choice within a group counts). Leave all empty to enroll people manually.
+              </p>
             </div>
+
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-slate-700">Company</p>
+              <div className="flex flex-wrap gap-2">
+                {companyOptions.map(c => (
+                  <Chip key={c} on={companies.includes(c)} onClick={() => toggle(companies, setCompanies, c)}>{c}</Chip>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-slate-700">Department</p>
+              <div className="flex flex-wrap gap-2">
+                {departmentOptions.map(d => (
+                  <Chip key={d} on={departments.includes(d)} onClick={() => toggle(departments, setDepartments, d)}>{d}</Chip>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-slate-700">Job role</p>
+              {roles.length === 0 ? (
+                <p className="text-xs text-slate-400">No job roles yet — add them on the Users page when you edit a user.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {roles.map(r => (
+                    <Chip key={r.id} on={roleIds.includes(r.id)} onClick={() => toggle(roleIds, setRoleIds, r.id)}>{r.name}</Chip>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-500">
+              {hasFilters
+                ? `${matchCount} current ${matchCount === 1 ? 'user matches' : 'users match'} these filters${published ? ' and will be enrolled when you save.' : ' (enrolled once the path is published).'}`
+                : 'No filters selected — nobody is enrolled automatically.'}
+            </p>
           </div>
 
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <Checkbox checked={autoNewHires} onCheckedChange={v => setAutoNewHires(!!v)} />
-              Enroll every newly created user automatically (new-hire path)
+              Also enroll every newly created user (new-hire path)
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <Checkbox checked={published} onCheckedChange={v => setPublished(!!v)} />
@@ -504,11 +487,10 @@ function PathEditorDialog({
 // ---------------------------------------------------------------------------
 
 function EnrollDialog({
-  path, people, roles, roleById, onClose,
+  path, people, roleById, onClose,
 }: {
   path: LearningPath
   people: PersonLite[]
-  roles: JobRole[]
   roleById: Map<string, JobRole>
   onClose: () => void
 }) {
@@ -524,6 +506,7 @@ function EnrollDialog({
       !q ||
       p.full_name.toLowerCase().includes(q) ||
       (p.department ?? '').toLowerCase().includes(q) ||
+      (p.company ?? '').toLowerCase().includes(q) ||
       (p.job_role_id ? roleById.get(p.job_role_id)?.name.toLowerCase().includes(q) : false)
     )
   }, [people, query, roleById])
@@ -536,17 +519,29 @@ function EnrollDialog({
       return next
     })
 
-  // Everyone holding a given job role — used by the role quick-select chips.
-  const peopleInRole = (roleId: string) => people.filter(p => p.job_role_id === roleId).map(p => p.id)
-  const roleFullySelected = (roleId: string) => {
-    const ids = peopleInRole(roleId)
-    return ids.length > 0 && ids.every(id => selected.has(id))
-  }
-  const toggleRole = (roleId: string) =>
+  // Quick-select groups built from the user records: everyone in a company,
+  // department or job role.
+  const groups = useMemo(() => {
+    const by = (label: string, key: (p: PersonLite) => string | null | undefined) => {
+      const map = new Map<string, string[]>()
+      for (const p of people) {
+        const k = key(p)
+        if (k) map.set(k, [...(map.get(k) ?? []), p.id])
+      }
+      return { label, entries: [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])) }
+    }
+    return [
+      by('Company', p => p.company),
+      by('Department', p => p.department),
+      by('Job role', p => (p.job_role_id ? roleById.get(p.job_role_id)?.name : null)),
+    ].filter(g => g.entries.length > 0)
+  }, [people, roleById])
+
+  const groupFullySelected = (ids: string[]) => ids.length > 0 && ids.every(id => selected.has(id))
+  const toggleGroup = (ids: string[]) =>
     setSelected(prev => {
       const next = new Set(prev)
-      const ids = peopleInRole(roleId)
-      const allIn = ids.length > 0 && ids.every(id => next.has(id))
+      const allIn = ids.every(id => next.has(id))
       for (const id of ids) {
         if (allIn) next.delete(id)
         else next.add(id)
@@ -586,34 +581,22 @@ function EnrollDialog({
         </DialogHeader>
 
         <div className="space-y-3">
-          {roles.some(r => peopleInRole(r.id).length > 0) && (
-            <div className="space-y-1.5">
-              <p className="text-sm font-medium text-slate-700">Add everyone in a job role</p>
+          {groups.map(g => (
+            <div key={g.label} className="space-y-1.5">
+              <p className="text-sm font-medium text-slate-700">Add everyone in a {g.label.toLowerCase()}</p>
               <div className="flex flex-wrap gap-2">
-                {roles.filter(r => peopleInRole(r.id).length > 0).map(r => {
-                  const on = roleFullySelected(r.id)
-                  return (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => toggleRole(r.id)}
-                      aria-pressed={on}
-                      className={cn(
-                        'rounded-full border px-3 py-1 text-sm transition-colors text-left',
-                        on ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-50'
-                      )}
-                    >
-                      {r.name} <span className={on ? 'text-blue-100' : 'text-slate-400'}>({peopleInRole(r.id).length})</span>
-                    </button>
-                  )
-                })}
+                {g.entries.map(([name, ids]) => (
+                  <Chip key={name} on={groupFullySelected(ids)} onClick={() => toggleGroup(ids)}>
+                    {name} <span className="opacity-60">({ids.length})</span>
+                  </Chip>
+                ))}
               </div>
             </div>
-          )}
+          ))}
 
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search by name, department or job role" className="pl-9" />
+            <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search by name, company, department or job role" className="pl-9" />
           </div>
 
           <div className="flex items-center justify-between text-sm">
@@ -623,7 +606,7 @@ function EnrollDialog({
             <span className="text-slate-500">{selected.size} selected</span>
           </div>
 
-          <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
+          <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
             {shown.length === 0 ? (
               <p className="p-4 text-center text-sm text-slate-400">No people match.</p>
             ) : shown.map(p => (
@@ -632,7 +615,7 @@ function EnrollDialog({
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-800 truncate">{p.full_name}</p>
                   <p className="text-xs text-slate-400 truncate">
-                    {[p.department, p.job_role_id ? roleById.get(p.job_role_id)?.name : null].filter(Boolean).join(' · ') || 'No department or role'}
+                    {[p.company, p.department, p.job_role_id ? roleById.get(p.job_role_id)?.name : null].filter(Boolean).join(' · ') || 'No company, department or role'}
                   </p>
                 </div>
               </label>

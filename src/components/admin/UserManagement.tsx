@@ -38,6 +38,10 @@ const roleBadgeVariant = (role: string) =>
 
 export function UserManagement({ initialProfiles, currentUserRole, currentUserId, jobRoles = [] }: Props) {
   const [profiles, setProfiles] = useState(initialProfiles)
+  // Job roles are created here, on the user form; Path Builder just reads them.
+  const [roles, setRoles] = useState<JobRole[]>(jobRoles)
+  const [newRole, setNewRole] = useState('')
+  const [addingRole, setAddingRole] = useState(false)
   const [search, setSearch] = useState('')
   const [filterCompany, setFilterCompany] = useState('all')
   const [filterDepartment, setFilterDepartment] = useState('all')
@@ -86,6 +90,22 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
     full_name: '', email: '', password: '', role: 'employee', company: '', department: '', manager_id: '', job_role_id: '', is_active: true,
   })
 
+  const addJobRole = async () => {
+    const name = newRole.trim()
+    if (!name) return
+    setAddingRole(true)
+    const { data, error } = await supabase.from('job_roles').insert({ name }).select('*').single()
+    setAddingRole(false)
+    if (error) {
+      toast.error(error.code === '23505' ? 'That job role already exists' : error.message)
+      return
+    }
+    setRoles(prev => [...prev, data as JobRole].sort((a, b) => a.name.localeCompare(b.name)))
+    setForm(f => ({ ...f, job_role_id: (data as JobRole).id }))
+    setNewRole('')
+    toast.success(`Added job role "${name}"`)
+  }
+
   const handleCreate = async () => {
     if (!form.full_name || !form.email || !form.password) {
       toast.error('Name, email, and password are required')
@@ -125,8 +145,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
           department: form.department || null,
           manager_id: form.manager_id || null,
           is_active: form.is_active,
-          // Only sent once job roles exist (i.e. the column does)
-          ...(jobRoles.length > 0 ? { job_role_id: form.job_role_id || null } : {}),
+          job_role_id: form.job_role_id || null,
         })
         .eq('id', editUser.id)
         .select()
@@ -458,24 +477,34 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                 </SelectContent>
               </Select>
             </div>
-            {jobRoles.length > 0 && (
-              <div className="space-y-1.5">
-                <Label>Job role (optional)</Label>
-                <Select
-                  value={form.job_role_id || '__none__'}
-                  onValueChange={v => setForm(f => ({ ...f, job_role_id: v === '__none__' ? '' : v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder="Select a job role" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No job role</SelectItem>
-                    {jobRoles.map(r => (
-                      <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-slate-400">Learning paths set for this role are assigned automatically.</p>
+            <div className="space-y-1.5">
+              <Label>Job role (optional)</Label>
+              <Select
+                value={form.job_role_id || '__none__'}
+                onValueChange={v => setForm(f => ({ ...f, job_role_id: v === '__none__' ? '' : v }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Select a job role" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No job role</SelectItem>
+                  {roles.map(r => (
+                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex gap-2">
+                <Input
+                  value={newRole}
+                  onChange={e => setNewRole(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addJobRole() } }}
+                  placeholder="Not listed? Type a new job role"
+                  aria-label="New job role"
+                />
+                <Button type="button" variant="outline" onClick={addJobRole} loading={addingRole} className="shrink-0">Add</Button>
               </div>
-            )}
+              <p className="text-xs text-slate-400">
+                Job roles are managed here. Learning paths can target a role, a company or a department, and enroll matching people automatically.
+              </p>
+            </div>
             {form.role === 'employee' && (
               <div className="space-y-1.5">
                 <Label>Manager (optional)</Label>

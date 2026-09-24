@@ -256,13 +256,18 @@ export interface LearningPathEnrollment {
   assigned_by: string | null
   assigned_at: string
   due_date: string | null
-  source: 'manual' | 'role' | 'new_hire'
+  source: 'manual' | 'role' | 'audience' | 'new_hire'
 }
 
-// A path can target any number of job roles; everyone holding one of them is
-// enrolled automatically. (learning_paths.job_role_id is the old single-role
-// column and is no longer used.)
-export interface LearningPathRole {
+// One audience filter on a path. A person is enrolled automatically when, for
+// every kind the path has filters for, they hold one of the chosen values:
+//   company / department -> the name as stored on the user record
+//   job_role             -> a job_roles.id
+// (learning_paths.job_role_id is the old single-role column and is unused.)
+export type LearningPathTargetKind = 'company' | 'department' | 'job_role'
+
+export interface LearningPathTarget {
   path_id: string
-  job_role_id: string
+  kind: LearningPathTargetKind
+  value: string
 }

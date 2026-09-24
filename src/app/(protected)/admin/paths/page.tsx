@@ -4,7 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { PathManager } from '@/components/admin/PathManager'
 import { isProtectedModule } from '@/lib/protected-modules'
 import { AlertTriangle } from 'lucide-react'
-import type { JobRole, LearningPath, Module, Profile } from '@/types'
+import type { JobRole, LearningPath, LearningPathTarget, Module, Profile } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +20,7 @@ export default async function PathBuilderPage() {
     { data: paths, error: pathsError },
     { data: roles, error: rolesError },
     { data: items },
-    { data: pathRoles },
+    { data: pathTargets },
     { data: enrollments },
     { data: modules },
     { data: people },
@@ -28,11 +28,10 @@ export default async function PathBuilderPage() {
     supabase.from('learning_paths').select('*').order('created_at', { ascending: false }),
     supabase.from('job_roles').select('*').order('name'),
     supabase.from('learning_path_items').select('path_id, module_id, order_index').order('order_index'),
-    // Empty (not an error) until the multiple-roles migration is applied
-    supabase.from('learning_path_roles').select('path_id, job_role_id'),
+    supabase.from('learning_path_targets').select('path_id, kind, value'),
     supabase.from('learning_path_enrollments').select('path_id'),
     supabase.from('modules').select('id, title, category, estimated_minutes').order('title'),
-    supabase.from('profiles').select('id, full_name, department, role, job_role_id, is_active').order('full_name'),
+    supabase.from('profiles').select('id, full_name, department, company, role, job_role_id, is_active').order('full_name'),
   ])
 
   // If the Phase 2 migration hasn't been applied yet these tables don't exist.
@@ -59,11 +58,6 @@ export default async function PathBuilderPage() {
   const enrollmentCounts: Record<string, number> = {}
   for (const e of enrollments ?? []) enrollmentCounts[e.path_id] = (enrollmentCounts[e.path_id] ?? 0) + 1
 
-  const memberCounts: Record<string, number> = {}
-  for (const p of people ?? []) {
-    if (p.job_role_id) memberCounts[p.job_role_id] = (memberCounts[p.job_role_id] ?? 0) + 1
-  }
-
   return (
     <div className="flex flex-col flex-1 overflow-auto">
       <Header title="Path Builder" />
@@ -71,12 +65,11 @@ export default async function PathBuilderPage() {
         <PathManager
           paths={(paths ?? []) as LearningPath[]}
           items={items ?? []}
-          pathRoles={pathRoles ?? []}
+          pathTargets={(pathTargets ?? []) as LearningPathTarget[]}
           enrollmentCounts={enrollmentCounts}
           roles={(roles ?? []) as JobRole[]}
-          memberCounts={memberCounts}
           modules={((modules ?? []) as Pick<Module, 'id' | 'title' | 'category' | 'estimated_minutes'>[]).filter(m => !isProtectedModule(m.id))}
-          people={((people ?? []) as Pick<Profile, 'id' | 'full_name' | 'department' | 'role' | 'job_role_id' | 'is_active'>[]).filter(p => p.is_active !== false)}
+          people={((people ?? []) as Pick<Profile, 'id' | 'full_name' | 'department' | 'company' | 'role' | 'job_role_id' | 'is_active'>[]).filter(p => p.is_active !== false)}
           currentUserId={user.id}
         />
       </main>
