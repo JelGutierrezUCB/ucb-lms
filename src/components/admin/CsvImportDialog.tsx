@@ -141,7 +141,7 @@ export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
           <DialogTitle>Bulk Import Users from CSV</DialogTitle>
           <DialogDescription>
             Columns: full_name, email, role (admin/manager/employee), job_role, company, department, manager_email (all optional except name and email).
-            New job roles are created automatically. Each user gets a generated password emailed to them, and is enrolled in any learning paths they match.
+            New job roles are created automatically. Each user gets a generated password emailed to them, and is enrolled in any learning journeys they match.
           </DialogDescription>
         </DialogHeader>
 

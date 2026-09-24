@@ -100,10 +100,10 @@ export function PathManager({ paths, items, pathTargets, enrollmentCounts, roles
   const targetsFor = (pathId: string) => pathTargets.filter(t => t.path_id === pathId)
 
   async function deletePath(path: LearningPath) {
-    if (!confirm(`Delete "${path.title}"? People already enrolled keep the trainings they were assigned, but the path itself is removed.`)) return
+    if (!confirm(`Delete "${path.title}"? People already enrolled keep the trainings they were assigned, but the journey itself is removed.`)) return
     const { error } = await supabase.from('learning_paths').delete().eq('id', path.id)
     if (error) { toast.error(error.message); return }
-    toast.success('Learning path deleted')
+    toast.success('Learning journey deleted')
     router.refresh()
   }
 
@@ -112,22 +112,22 @@ export function PathManager({ paths, items, pathTargets, enrollmentCounts, roles
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Learning paths</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Learning journeys</h2>
             <p className="text-sm text-slate-500">
-              An ordered set of trainings. Enrolling someone assigns every training in it. A path can enroll people
+              An ordered set of trainings. Enrolling someone assigns every training in it. A journey can enroll people
               automatically by the Company, Department and Job role set on their user record, or every new hire.
             </p>
           </div>
           <Button onClick={() => setEditing('new')} className="shrink-0">
-            <Plus className="h-4 w-4 mr-2" /> New path
+            <Plus className="h-4 w-4 mr-2" /> New journey
           </Button>
         </div>
 
         {paths.length === 0 ? (
           <div className="text-center py-14 rounded-xl border border-dashed border-slate-300 bg-white">
             <Layers className="h-10 w-10 text-slate-300 mx-auto mb-2" />
-            <p className="text-slate-500 font-medium">No learning paths yet</p>
-            <p className="text-slate-400 text-sm mt-1">Create one for a company, department or job role, or an onboarding path for new hires.</p>
+            <p className="text-slate-500 font-medium">No learning journeys yet</p>
+            <p className="text-slate-400 text-sm mt-1">Create one for a company, department or job role, or an onboarding journey for new hires.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -188,7 +188,7 @@ export function PathManager({ paths, items, pathTargets, enrollmentCounts, roles
                         <Button variant="outline" size="sm" onClick={() => setEditing(path)}>
                           <Pencil className="h-4 w-4 mr-1.5" /> Edit
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => deletePath(path)} title="Delete path" className="text-slate-400 hover:text-red-600">
+                        <Button variant="ghost" size="icon" onClick={() => deletePath(path)} title="Delete journey" className="text-slate-400 hover:text-red-600">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -300,7 +300,7 @@ function PathEditorDialog({
     })
 
   async function save() {
-    if (!title.trim()) { toast.error('Give the path a title'); return }
+    if (!title.trim()) { toast.error('Give the journey a title'); return }
     if (published && moduleIds.length === 0) { toast.error('Add at least one training before publishing'); return }
     setSaving(true)
     try {
@@ -365,13 +365,13 @@ function PathEditorDialog({
       }
 
       toast.success(
-        path ? 'Learning path saved' : 'Learning path created',
+        path ? 'Learning journey saved' : 'Learning journey created',
         enrolled > 0 ? { description: `${enrolled} matching ${enrolled === 1 ? 'person is' : 'people are'} enrolled.` } : undefined
       )
       onClose()
       router.refresh()
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to save learning path')
+      toast.error(err.message ?? 'Failed to save learning journey')
     } finally {
       setSaving(false)
     }
@@ -381,7 +381,7 @@ function PathEditorDialog({
     <Dialog open onOpenChange={open => { if (!open) onClose() }}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{path ? 'Edit learning path' : 'New learning path'}</DialogTitle>
+          <DialogTitle>{path ? 'Edit learning journey' : 'New learning journey'}</DialogTitle>
           <DialogDescription>Build an ordered sequence of trainings and choose who gets it automatically.</DialogDescription>
         </DialogHeader>
 
@@ -392,7 +392,7 @@ function PathEditorDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Description</Label>
-            <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="What this path covers and who it's for" />
+            <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="What this journey covers and who it's for" />
           </div>
 
           <div className="space-y-1.5 sm:max-w-xs">
@@ -400,7 +400,7 @@ function PathEditorDialog({
             <Select value={kind} onValueChange={v => setKind(v as LearningPathKind)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="learning">Learning path</SelectItem>
+                <SelectItem value="learning">Learning journey</SelectItem>
                 <SelectItem value="onboarding">New-hire onboarding</SelectItem>
               </SelectContent>
             </Select>
@@ -409,7 +409,7 @@ function PathEditorDialog({
           {/* Audience — taken from the Users section */}
           <div className="space-y-3 rounded-lg border border-slate-200 p-3">
             <div>
-              <Label>Who gets this path automatically</Label>
+              <Label>Who gets this journey automatically</Label>
               <p className="text-xs text-slate-400 mt-0.5">
                 Based on each person&apos;s details in Users: Company, Department, Job role, Manager and Account type. This
                 stays in sync as you edit users. A person needs to match every group you fill in (any one choice within a group
@@ -474,7 +474,7 @@ function PathEditorDialog({
 
             <p className="text-xs text-slate-500">
               {hasFilters
-                ? `${matchCount} current ${matchCount === 1 ? 'user matches' : 'users match'} these filters${published ? ' and will be enrolled when you save.' : ' (enrolled once the path is published).'}`
+                ? `${matchCount} current ${matchCount === 1 ? 'user matches' : 'users match'} these filters${published ? ' and will be enrolled when you save.' : ' (enrolled once the journey is published).'}`
                 : 'No filters selected — nobody is enrolled automatically.'}
             </p>
           </div>
@@ -537,7 +537,7 @@ function PathEditorDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button loading={saving} onClick={save}>{path ? 'Save changes' : 'Create path'}</Button>
+          <Button loading={saving} onClick={save}>{path ? 'Save changes' : 'Create journey'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -637,7 +637,7 @@ function EnrollDialog({
         <DialogHeader>
           <DialogTitle>Enroll in &ldquo;{path.title}&rdquo;</DialogTitle>
           <DialogDescription>
-            Everyone selected is assigned every training in this path. People already assigned a training keep their existing assignment.
+            Everyone selected is assigned every training in this journey. People already assigned a training keep their existing assignment.
           </DialogDescription>
         </DialogHeader>
 

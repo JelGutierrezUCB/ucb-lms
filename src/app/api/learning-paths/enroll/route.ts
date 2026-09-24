@@ -31,8 +31,8 @@ export async function POST(req: NextRequest) {
 
   await notifyUsers(userIds, {
     type: 'assignment',
-    title: 'New learning path assigned',
-    message: `You've been enrolled in the learning path "${path?.title ?? 'Learning path'}".${dueText}`,
+    title: 'New learning journey assigned',
+    message: `You've been enrolled in the learning journey "${path?.title ?? 'Learning journey'}".${dueText}`,
     link: '/paths',
   })
 

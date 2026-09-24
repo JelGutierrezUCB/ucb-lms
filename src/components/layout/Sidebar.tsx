@@ -67,7 +67,7 @@ const navItems: NavItem[] = [
   },
   {
     href: '/admin/paths',
-    label: 'Path Builder',
+    label: 'Journey Builder',
     icon: <Layers className="h-5 w-5" />,
     roles: ['admin'],
   },

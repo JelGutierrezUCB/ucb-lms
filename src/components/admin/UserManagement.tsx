@@ -38,7 +38,7 @@ const roleBadgeVariant = (role: string) =>
 
 export function UserManagement({ initialProfiles, currentUserRole, currentUserId, jobRoles = [] }: Props) {
   const [profiles, setProfiles] = useState(initialProfiles)
-  // Job roles are created here, on the user form; Path Builder just reads them.
+  // Job roles are created here, on the user form; Journey Builder just reads them.
   const [roles, setRoles] = useState<JobRole[]>(jobRoles)
   const [newRole, setNewRole] = useState('')
   const [addingRole, setAddingRole] = useState(false)
@@ -504,7 +504,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                 <Button type="button" variant="outline" onClick={addJobRole} loading={addingRole} className="shrink-0">Add</Button>
               </div>
               <p className="text-xs text-slate-400">
-                Job roles are managed here. Learning paths use these details (job role, company, department, manager and account type) and enroll matching people automatically.
+                Job roles are managed here. Learning journeys use these details (job role, company, department, manager and account type) and enroll matching people automatically.
               </p>
             </div>
             <div className="space-y-1.5">

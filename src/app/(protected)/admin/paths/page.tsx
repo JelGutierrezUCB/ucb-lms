@@ -38,11 +38,11 @@ export default async function PathBuilderPage() {
   if (pathsError || rolesError) {
     return (
       <div className="flex flex-col flex-1 overflow-auto">
-        <Header title="Path Builder" />
+        <Header title="Journey Builder" />
         <main className="flex-1 p-4 sm:p-6">
           <div className="max-w-2xl rounded-xl border border-amber-300 bg-amber-50 p-5 space-y-2">
             <p className="flex items-center gap-2 font-semibold text-amber-900">
-              <AlertTriangle className="h-5 w-5" /> Learning paths aren&apos;t set up in the database yet
+              <AlertTriangle className="h-5 w-5" /> Learning journeys aren&apos;t set up in the database yet
             </p>
             <p className="text-sm text-amber-900/80">
               Run <code className="rounded bg-amber-100 px-1">supabase/migrations/20260924_learning_paths.sql</code> once
@@ -60,7 +60,7 @@ export default async function PathBuilderPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Path Builder" />
+      <Header title="Journey Builder" />
       <main className="flex-1 p-4 sm:p-6">
         <PathManager
           paths={(paths ?? []) as LearningPath[]}
