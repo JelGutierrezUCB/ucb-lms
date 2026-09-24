@@ -18,6 +18,8 @@ export interface UserPath {
   steps: PathStep[]
   completedSteps: number
   percent: number
+  // Rough time still to go, from each training's estimate and how far along it is.
+  minutesLeft: number
   // First step that isn't finished yet; null once the whole path is done.
   nextStep: PathStep | null
 }
@@ -93,6 +95,7 @@ export async function loadUserPaths(supabase: Db, userId: string): Promise<UserP
       steps,
       completedSteps,
       percent: steps.length > 0 ? Math.round((completedSteps / steps.length) * 100) : 0,
+      minutesLeft: steps.reduce((sum, s) => sum + Math.round((s.module.estimated_minutes ?? 0) * (100 - s.percent) / 100), 0),
       nextStep: steps.find(s => s.percent < 100) ?? null,
     }
   })

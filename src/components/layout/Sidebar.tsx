@@ -43,7 +43,7 @@ const navItems: NavItem[] = [
   },
   {
     href: '/paths',
-    label: 'Learning Paths',
+    label: 'Learning Journeys',
     icon: <Route className="h-5 w-5" />,
     roles: ['admin', 'manager', 'employee'],
   },

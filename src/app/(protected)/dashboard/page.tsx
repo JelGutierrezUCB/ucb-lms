@@ -2,11 +2,13 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import { BookOpen, CheckCircle, Clock, TrendingUp, Target, Award, Download, AlertTriangle, PlayCircle, Lightbulb, Route } from 'lucide-react'
+import { BookOpen, CheckCircle, Clock, TrendingUp, Target, Award, Download, AlertTriangle, Lightbulb, Route } from 'lucide-react'
 import Link from 'next/link'
 import { getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
 import { loadUserPaths } from '@/lib/learning-paths'
+import { NextStepHero, type NextAction } from '@/components/dashboard/NextStepHero'
+import { JourneyDots } from '@/components/paths/JourneyDots'
+import { ProgressRing } from '@/components/ui/progress-ring'
 import { isProtectedModule } from '@/lib/protected-modules'
 import { AssignedTrainings, type DashboardTraining } from '@/components/dashboard/AssignedTrainings'
 import type { Profile, Module, Assignment, Certificate } from '@/types'
@@ -143,6 +145,72 @@ export default async function DashboardPage() {
   // Learning paths (job-role / onboarding sequences). Empty until paths exist.
   const userPaths = (await loadUserPaths(supabase, user.id)).filter(p => p.percent < 100)
 
+  // The one thing to do next, in priority order: something overdue, then the
+  // next step of an onboarding journey, then whatever was started most
+  // recently, then the next step of another journey, then anything not started.
+  const overdueItem = assignmentsWithProgress
+    .filter(a => a.overdue)
+    .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''))[0]
+  const onboardingJourney = userPaths.find(p => p.path.kind === 'onboarding' && p.nextStep)
+  const otherJourney = userPaths.find(p => p.path.kind !== 'onboarding' && p.nextStep)
+  const notStartedItem = assignmentsWithProgress.find(a => a.percent === 0)
+
+  const stepOf = (p: (typeof userPaths)[number]) => `${p.path.title} · step ${p.completedSteps + 1} of ${p.steps.length}`
+  const minutesText = (m?: number | null) => (m ? `About ${m} min` : undefined)
+
+  let nextAction: NextAction | null = null
+  if (overdueItem) {
+    nextAction = {
+      reason: 'overdue',
+      title: overdueItem.module?.title ?? 'Training',
+      subtitle: `Due ${formatDate(overdueItem.due_date)}${overdueItem.nextSectionTitle && overdueItem.percent > 0 ? ` · Next up: ${overdueItem.nextSectionTitle}` : ''}`,
+      meta: minutesText(overdueItem.module?.estimated_minutes),
+      href: `/training/${overdueItem.module_id}`,
+      percent: overdueItem.percent,
+      cta: overdueItem.percent > 0 ? 'Continue' : 'Start now',
+    }
+  } else if (onboardingJourney?.nextStep) {
+    nextAction = {
+      reason: 'onboarding',
+      title: onboardingJourney.nextStep.module.title,
+      subtitle: stepOf(onboardingJourney),
+      meta: minutesText(onboardingJourney.nextStep.module.estimated_minutes),
+      href: `/training/${onboardingJourney.nextStep.module.id}`,
+      percent: onboardingJourney.percent,
+      cta: onboardingJourney.nextStep.percent > 0 ? 'Continue' : 'Start',
+    }
+  } else if (continueItem) {
+    nextAction = {
+      reason: 'continue',
+      title: continueItem.module?.title ?? 'Training',
+      subtitle: continueItem.nextSectionTitle ? `Next up: ${continueItem.nextSectionTitle}` : undefined,
+      meta: minutesText(continueItem.module?.estimated_minutes),
+      href: `/training/${continueItem.module_id}`,
+      percent: continueItem.percent,
+      cta: 'Resume',
+    }
+  } else if (otherJourney?.nextStep) {
+    nextAction = {
+      reason: 'journey',
+      title: otherJourney.nextStep.module.title,
+      subtitle: stepOf(otherJourney),
+      meta: minutesText(otherJourney.nextStep.module.estimated_minutes),
+      href: `/training/${otherJourney.nextStep.module.id}`,
+      percent: otherJourney.percent,
+      cta: otherJourney.nextStep.percent > 0 ? 'Continue' : 'Start',
+    }
+  } else if (notStartedItem) {
+    nextAction = {
+      reason: 'start',
+      title: notStartedItem.module?.title ?? 'Training',
+      subtitle: notStartedItem.due_date ? `Due ${formatDate(notStartedItem.due_date)}` : notStartedItem.module?.auto_assign_all ? 'Required for everyone' : undefined,
+      meta: minutesText(notStartedItem.module?.estimated_minutes),
+      href: `/training/${notStartedItem.module_id}`,
+      percent: 0,
+      cta: 'Start',
+    }
+  }
+
   const dashboardTrainings: DashboardTraining[] = assignmentsWithProgress.map(a => ({
     moduleId: a.module_id,
     title: a.module?.title ?? 'Untitled training',
@@ -223,6 +291,8 @@ export default async function DashboardPage() {
           </div>
         </div>
 
+        <NextStepHero action={nextAction} />
+
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
           {[
             { label: 'Assigned', value: assignmentsWithProgress.length, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-50' },
@@ -247,14 +317,14 @@ export default async function DashboardPage() {
           ))}
         </div>
 
-        {/* Learning paths in progress */}
+        {/* Learning journeys in progress */}
         {userPaths.length > 0 && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
-                <Route className="h-5 w-5 text-blue-600" /> My Learning Paths
+                <Route className="h-5 w-5 text-blue-600" /> My Learning Journeys
               </CardTitle>
-              <Link href="/paths" className="text-sm text-blue-600 hover:underline">View all</Link>
+              <Link href="/paths" className="text-sm text-blue-600 hover:underline">View roadmaps</Link>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -264,54 +334,31 @@ export default async function DashboardPage() {
                     href="/paths"
                     className="block rounded-xl border border-slate-200 p-4 hover:border-blue-200 hover:bg-blue-50/30 transition-all"
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold text-slate-900 truncate">
-                        {p.path.kind === 'onboarding' && (
-                          <span className="mr-2 text-xs font-semibold uppercase tracking-wide text-blue-700">Onboarding</span>
+                    <div className="flex items-center gap-4">
+                      <ProgressRing percent={p.percent} size={52} stroke={5} />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-semibold text-slate-900 truncate">
+                            {p.path.kind === 'onboarding' && (
+                              <span className="mr-2 text-xs font-semibold uppercase tracking-wide text-blue-700">Onboarding</span>
+                            )}
+                            {p.path.title}
+                          </p>
+                          <span className="text-xs text-slate-500 shrink-0">{p.completedSteps}/{p.steps.length} steps</span>
+                        </div>
+                        <div className="overflow-x-auto py-1">
+                          <JourneyDots steps={p.steps} />
+                        </div>
+                        {p.nextStep && (
+                          <p className="text-sm text-slate-500 truncate">Next: {p.nextStep.module.title}</p>
                         )}
-                        {p.path.title}
-                      </p>
-                      <span className="text-xs text-slate-500 shrink-0">{p.completedSteps}/{p.steps.length} done</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <Progress value={p.percent} className="flex-1 h-1.5" />
-                      <span className="text-xs text-slate-500 shrink-0">{p.percent}%</span>
-                    </div>
-                    {p.nextStep && (
-                      <p className="text-sm text-slate-500 mt-2 truncate">Next: {p.nextStep.module.title}</p>
-                    )}
                   </Link>
                 ))}
               </div>
             </CardContent>
           </Card>
-        )}
-
-        {/* Continue where you left off */}
-        {continueItem && (
-          <Link href={`/training/${continueItem.module_id}`} className="block group">
-            <Card className="border-blue-200 bg-blue-50/40 group-hover:bg-blue-50 transition-colors">
-              <CardContent className="p-4 sm:p-5 flex items-center gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
-                  <PlayCircle className="h-6 w-6" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Continue where you left off</p>
-                  <p className="font-semibold text-slate-900 truncate">{continueItem.module?.title}</p>
-                  {continueItem.nextSectionTitle && (
-                    <p className="text-sm text-slate-500 truncate">Next up: {continueItem.nextSectionTitle}</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-2">
-                    <Progress value={continueItem.percent} className="flex-1 h-1.5" />
-                    <span className="text-xs text-slate-500 shrink-0">{continueItem.percent}%</span>
-                  </div>
-                </div>
-                <span className="hidden sm:inline-flex shrink-0 items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white group-hover:bg-blue-700">
-                  Resume
-                </span>
-              </CardContent>
-            </Card>
-          </Link>
         )}
 
         <Card>
