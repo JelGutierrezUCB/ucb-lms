@@ -31,7 +31,7 @@ export default async function PathBuilderPage() {
     supabase.from('learning_path_targets').select('path_id, kind, value'),
     supabase.from('learning_path_enrollments').select('path_id'),
     supabase.from('modules').select('id, title, category, estimated_minutes').order('title'),
-    supabase.from('profiles').select('id, full_name, department, company, role, job_role_id, is_active').order('full_name'),
+    supabase.from('profiles').select('id, full_name, department, company, role, manager_id, job_role_id, is_active').order('full_name'),
   ])
 
   // If the Phase 2 migration hasn't been applied yet these tables don't exist.
@@ -69,7 +69,7 @@ export default async function PathBuilderPage() {
           enrollmentCounts={enrollmentCounts}
           roles={(roles ?? []) as JobRole[]}
           modules={((modules ?? []) as Pick<Module, 'id' | 'title' | 'category' | 'estimated_minutes'>[]).filter(m => !isProtectedModule(m.id))}
-          people={((people ?? []) as Pick<Profile, 'id' | 'full_name' | 'department' | 'company' | 'role' | 'job_role_id' | 'is_active'>[]).filter(p => p.is_active !== false)}
+          people={((people ?? []) as Pick<Profile, 'id' | 'full_name' | 'department' | 'company' | 'role' | 'manager_id' | 'job_role_id' | 'is_active'>[]).filter(p => p.is_active !== false)}
           currentUserId={user.id}
         />
       </main>

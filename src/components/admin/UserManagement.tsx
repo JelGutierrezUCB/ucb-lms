@@ -294,10 +294,11 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Name</th>
-                <th className="text-left px-4 py-3 text-slate-600 font-medium">Role</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Account type</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Job role</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Company</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Department</th>
-                <th className="text-left px-4 py-3 text-slate-600 font-medium">Manager</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Supervisor</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Joined</th>
                 {currentUserRole === 'admin' && (
                   <th className="text-right px-4 py-3 text-slate-600 font-medium">Actions</th>
@@ -307,7 +308,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-10 text-slate-400">No users found</td>
+                  <td colSpan={8} className="text-center py-10 text-slate-400">No users found</td>
                 </tr>
               ) : (
                 filtered.map(user => {
@@ -331,6 +332,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                       <td className="px-4 py-3">
                         <Badge variant={roleBadgeVariant(user.role)}>{getRoleLabel(user.role)}</Badge>
                       </td>
+                      <td className="px-4 py-3 text-slate-600">{roles.find(r => r.id === user.job_role_id)?.name ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{user.company ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{user.department ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{manager?.full_name ?? '—'}</td>
@@ -502,26 +504,24 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                 <Button type="button" variant="outline" onClick={addJobRole} loading={addingRole} className="shrink-0">Add</Button>
               </div>
               <p className="text-xs text-slate-400">
-                Job roles are managed here. Learning paths can target a role, a company or a department, and enroll matching people automatically.
+                Job roles are managed here. Learning paths use these details (job role, company, department, supervisor and account type) and enroll matching people automatically.
               </p>
             </div>
-            {form.role === 'employee' && (
-              <div className="space-y-1.5">
-                <Label>Manager (optional)</Label>
-                <Select
-                  value={form.manager_id || '__none__'}
-                  onValueChange={v => setForm(f => ({ ...f, manager_id: v === '__none__' ? '' : v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder="Assign a manager" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No manager</SelectItem>
-                    {managers.map(m => (
-                      <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            <div className="space-y-1.5">
+              <Label>Supervisor (optional)</Label>
+              <Select
+                value={form.manager_id || '__none__'}
+                onValueChange={v => setForm(f => ({ ...f, manager_id: v === '__none__' ? '' : v }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Assign a supervisor" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No supervisor</SelectItem>
+                  {managers.filter(m => m.id !== editUser?.id).map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {/* Active / Inactive — only show when editing, and not for yourself */}
             {editUser && editUser.id !== currentUserId && (
               <div className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3">

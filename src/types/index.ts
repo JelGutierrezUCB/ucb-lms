@@ -263,8 +263,10 @@ export interface LearningPathEnrollment {
 // every kind the path has filters for, they hold one of the chosen values:
 //   company / department -> the name as stored on the user record
 //   job_role             -> a job_roles.id
+//   supervisor           -> the supervisor's profile id (their direct reports)
+//   account_role         -> 'employee' | 'manager' | 'admin'
 // (learning_paths.job_role_id is the old single-role column and is unused.)
-export type LearningPathTargetKind = 'company' | 'department' | 'job_role'
+export type LearningPathTargetKind = 'company' | 'department' | 'job_role' | 'supervisor' | 'account_role'
 
 export interface LearningPathTarget {
   path_id: string

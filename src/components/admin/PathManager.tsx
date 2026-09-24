@@ -26,7 +26,21 @@ import { COMPANIES, COMPANY_DEPARTMENTS } from '@/types'
 import type { JobRole, LearningPath, LearningPathKind, LearningPathTarget, Module, Profile } from '@/types'
 
 type ModuleLite = Pick<Module, 'id' | 'title' | 'category' | 'estimated_minutes'>
-type PersonLite = Pick<Profile, 'id' | 'full_name' | 'department' | 'company' | 'role' | 'job_role_id' | 'is_active'>
+type PersonLite = Pick<Profile, 'id' | 'full_name' | 'department' | 'company' | 'role' | 'manager_id' | 'job_role_id' | 'is_active'>
+
+const ACCOUNT_TYPES: { value: string; label: string }[] = [
+  { value: 'employee', label: 'Employees' },
+  { value: 'manager', label: 'Managers' },
+  { value: 'admin', label: 'Admins' },
+]
+
+interface AudienceFilters {
+  companies: string[]
+  departments: string[]
+  roleIds: string[]
+  supervisorIds: string[]
+  accountTypes: string[]
+}
 
 interface Props {
   paths: LearningPath[]
@@ -42,12 +56,14 @@ interface Props {
 
 // Same rule the database uses: every kind of filter that has a selection must
 // match (any one value within a kind); no filters at all matches nobody.
-function matchesAudience(p: PersonLite, companies: string[], departments: string[], roleIds: string[]) {
-  if (!companies.length && !departments.length && !roleIds.length) return false
+function matchesAudience(p: PersonLite, f: AudienceFilters) {
+  if (!f.companies.length && !f.departments.length && !f.roleIds.length && !f.supervisorIds.length && !f.accountTypes.length) return false
   return (
-    (!companies.length || (p.company != null && companies.includes(p.company))) &&
-    (!departments.length || (p.department != null && departments.includes(p.department))) &&
-    (!roleIds.length || (p.job_role_id != null && roleIds.includes(p.job_role_id)))
+    (!f.companies.length || (p.company != null && f.companies.includes(p.company))) &&
+    (!f.departments.length || (p.department != null && f.departments.includes(p.department))) &&
+    (!f.roleIds.length || (p.job_role_id != null && f.roleIds.includes(p.job_role_id))) &&
+    (!f.supervisorIds.length || (p.manager_id != null && f.supervisorIds.includes(p.manager_id))) &&
+    (!f.accountTypes.length || f.accountTypes.includes(p.role))
   )
 }
 
@@ -76,6 +92,7 @@ export function PathManager({ paths, items, pathTargets, enrollmentCounts, roles
 
   const moduleById = useMemo(() => new Map(modules.map(m => [m.id, m])), [modules])
   const roleById = useMemo(() => new Map(roles.map(r => [r.id, r])), [roles])
+  const personName = useMemo(() => new Map(people.map(p => [p.id, p.full_name])), [people])
 
   const itemsFor = (pathId: string) =>
     items.filter(i => i.path_id === pathId).sort((a, b) => a.order_index - b.order_index)
@@ -136,8 +153,14 @@ export function PathManager({ paths, items, pathTargets, enrollmentCounts, roles
                       )}
                       {targets.map(t => (
                         <Badge key={`${t.kind}:${t.value}`} variant="outline">
-                          {t.kind === 'company' ? 'Company' : t.kind === 'department' ? 'Dept' : 'Role'}:{' '}
-                          {t.kind === 'job_role' ? roleById.get(t.value)?.name ?? 'Unknown role' : t.value}
+                          {{ company: 'Company', department: 'Dept', job_role: 'Role', supervisor: 'Team of', account_role: 'Type' }[t.kind]}:{' '}
+                          {t.kind === 'job_role'
+                            ? roleById.get(t.value)?.name ?? 'Unknown role'
+                            : t.kind === 'supervisor'
+                              ? personName.get(t.value) ?? 'Unknown'
+                              : t.kind === 'account_role'
+                                ? ACCOUNT_TYPES.find(a => a.value === t.value)?.label ?? t.value
+                                : t.value}
                         </Badge>
                       ))}
                       {path.auto_enroll_new_hires && <Badge variant="warning">Auto-enrolls new hires</Badge>}
@@ -227,6 +250,8 @@ function PathEditorDialog({
   const [companies, setCompanies] = useState<string[]>(initialTargets.filter(t => t.kind === 'company').map(t => t.value))
   const [departments, setDepartments] = useState<string[]>(initialTargets.filter(t => t.kind === 'department').map(t => t.value))
   const [roleIds, setRoleIds] = useState<string[]>(initialTargets.filter(t => t.kind === 'job_role').map(t => t.value))
+  const [supervisorIds, setSupervisorIds] = useState<string[]>(initialTargets.filter(t => t.kind === 'supervisor').map(t => t.value))
+  const [accountTypes, setAccountTypes] = useState<string[]>(initialTargets.filter(t => t.kind === 'account_role').map(t => t.value))
   const [autoNewHires, setAutoNewHires] = useState(path?.auto_enroll_new_hires ?? false)
   const [published, setPublished] = useState(path?.is_published ?? false)
   const [moduleIds, setModuleIds] = useState<string[]>(initialModuleIds)
@@ -251,10 +276,18 @@ function PathEditorDialog({
   const toggle = (list: string[], setList: (v: string[]) => void, value: string) =>
     setList(list.includes(value) ? list.filter(v => v !== value) : [...list, value])
 
-  const hasFilters = companies.length + departments.length + roleIds.length > 0
+  // Supervisors are whoever has been set as someone's supervisor on the Users page.
+  const supervisorOptions = useMemo(() => {
+    const ids = new Set([...people.map(p => p.manager_id).filter((id): id is string => !!id), ...supervisorIds])
+    return [...ids]
+      .map(id => ({ id, name: people.find(p => p.id === id)?.full_name ?? 'Unknown', team: people.filter(p => p.manager_id === id).length }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [people, supervisorIds])
+
+  const hasFilters = companies.length + departments.length + roleIds.length + supervisorIds.length + accountTypes.length > 0
   const matchCount = useMemo(
-    () => people.filter(p => matchesAudience(p, companies, departments, roleIds)).length,
-    [people, companies, departments, roleIds]
+    () => people.filter(p => matchesAudience(p, { companies, departments, roleIds, supervisorIds, accountTypes })).length,
+    [people, companies, departments, roleIds, supervisorIds, accountTypes]
   )
 
   const move = (index: number, delta: number) =>
@@ -307,6 +340,8 @@ function PathEditorDialog({
         ...companies.map(value => ({ path_id: pathId, kind: 'company', value })),
         ...departments.map(value => ({ path_id: pathId, kind: 'department', value })),
         ...roleIds.map(value => ({ path_id: pathId, kind: 'job_role', value })),
+        ...supervisorIds.map(value => ({ path_id: pathId, kind: 'supervisor', value })),
+        ...accountTypes.map(value => ({ path_id: pathId, kind: 'account_role', value })),
       ]
       if (targetRows.length > 0) {
         const { error: targetsError } = await supabase.from('learning_path_targets').insert(targetRows)
@@ -376,8 +411,9 @@ function PathEditorDialog({
             <div>
               <Label>Who gets this path automatically</Label>
               <p className="text-xs text-slate-400 mt-0.5">
-                Based on each person&apos;s Company, Department and Job role in Users. Pick any values; a person needs to match
-                every group you fill in (any one choice within a group counts). Leave all empty to enroll people manually.
+                Based on each person&apos;s details in Users: Company, Department, Job role, Supervisor and Account type. This
+                stays in sync as you edit users. A person needs to match every group you fill in (any one choice within a group
+                counts). Leave all empty to enroll people manually.
               </p>
             </div>
 
@@ -410,6 +446,30 @@ function PathEditorDialog({
                   ))}
                 </div>
               )}
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-slate-700">Supervisor (their team)</p>
+              {supervisorOptions.length === 0 ? (
+                <p className="text-xs text-slate-400">No supervisors yet — set a supervisor on a user in the Users page.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {supervisorOptions.map(s => (
+                    <Chip key={s.id} on={supervisorIds.includes(s.id)} onClick={() => toggle(supervisorIds, setSupervisorIds, s.id)}>
+                      {s.name} <span className="opacity-60">({s.team})</span>
+                    </Chip>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-slate-700">Account type</p>
+              <div className="flex flex-wrap gap-2">
+                {ACCOUNT_TYPES.map(a => (
+                  <Chip key={a.value} on={accountTypes.includes(a.value)} onClick={() => toggle(accountTypes, setAccountTypes, a.value)}>{a.label}</Chip>
+                ))}
+              </div>
             </div>
 
             <p className="text-xs text-slate-500">
@@ -534,6 +594,7 @@ function EnrollDialog({
       by('Company', p => p.company),
       by('Department', p => p.department),
       by('Job role', p => (p.job_role_id ? roleById.get(p.job_role_id)?.name : null)),
+      by('Supervisor', p => (p.manager_id ? people.find(x => x.id === p.manager_id)?.full_name : null)),
     ].filter(g => g.entries.length > 0)
   }, [people, roleById])
 
@@ -583,7 +644,9 @@ function EnrollDialog({
         <div className="space-y-3">
           {groups.map(g => (
             <div key={g.label} className="space-y-1.5">
-              <p className="text-sm font-medium text-slate-700">Add everyone in a {g.label.toLowerCase()}</p>
+              <p className="text-sm font-medium text-slate-700">
+                {g.label === 'Supervisor' ? "Add a supervisor's whole team" : `Add everyone in a ${g.label.toLowerCase()}`}
+              </p>
               <div className="flex flex-wrap gap-2">
                 {g.entries.map(([name, ids]) => (
                   <Chip key={name} on={groupFullySelected(ids)} onClick={() => toggleGroup(ids)}>
