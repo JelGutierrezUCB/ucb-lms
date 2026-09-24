@@ -9,7 +9,6 @@ import {
   History,
   Route,
   Layers,
-  ListChecks,
   Users,
   FolderOpen,
   Sparkles,
@@ -46,7 +45,8 @@ const navItems: NavItem[] = [
     href: '/paths',
     label: 'Learning Journeys',
     icon: <Route className="h-5 w-5" />,
-    roles: ['admin', 'manager', 'employee'],
+    // Admins reach their own journeys as a tab inside Learning Management.
+    roles: ['manager', 'employee'],
   },
   {
     href: '/training-history',
@@ -67,14 +67,9 @@ const navItems: NavItem[] = [
     roles: ['admin'],
   },
   {
-    href: '/admin/rules',
-    label: 'Assignment Rules',
-    icon: <ListChecks className="h-5 w-5" />,
-    roles: ['admin'],
-  },
-  {
-    href: '/admin/paths',
-    label: 'Journey Builder',
+    // Journey Builder, Assignment Rules and My Journeys, as tabs of one section
+    href: '/admin/learning',
+    label: 'Learning Management',
     icon: <Layers className="h-5 w-5" />,
     roles: ['admin'],
   },

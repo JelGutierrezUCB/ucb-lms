@@ -1,0 +1,60 @@
+import { createClient } from '@/lib/supabase/server'
+import { PathManager } from '@/components/admin/PathManager'
+import { isProtectedModule } from '@/lib/protected-modules'
+import { AlertTriangle } from 'lucide-react'
+import type { JobRole, LearningPath, LearningPathTarget, Module, Profile } from '@/types'
+
+// "Journey Builder" tab: create and manage learning journeys.
+export async function JourneyBuilderContent({ userId }: { userId: string }) {
+  const supabase = await createClient()
+
+  const [
+    { data: paths, error: pathsError },
+    { data: roles, error: rolesError },
+    { data: items },
+    { data: pathTargets },
+    { data: enrollments },
+    { data: modules },
+    { data: people },
+  ] = await Promise.all([
+    supabase.from('learning_paths').select('*').order('created_at', { ascending: false }),
+    supabase.from('job_roles').select('*').order('name'),
+    supabase.from('learning_path_items').select('path_id, module_id, order_index, phase, note').order('order_index'),
+    supabase.from('learning_path_targets').select('path_id, kind, value'),
+    supabase.from('learning_path_enrollments').select('path_id'),
+    supabase.from('modules').select('id, title, category, estimated_minutes').order('title'),
+    supabase.from('profiles').select('id, full_name, department, company, role, manager_id, job_role_id, is_active').order('full_name'),
+  ])
+
+  // If the learning-journeys migration hasn't been applied yet these tables don't exist.
+  if (pathsError || rolesError) {
+    return (
+      <div className="max-w-2xl space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-5">
+        <p className="flex items-center gap-2 font-semibold text-amber-900">
+          <AlertTriangle className="h-5 w-5" /> Learning journeys aren&apos;t set up in the database yet
+        </p>
+        <p className="text-sm text-amber-900/80">
+          Run <code className="rounded bg-amber-100 px-1">supabase/migrations/20260924_learning_paths.sql</code> once
+          in the Supabase SQL editor, then reload this page.
+        </p>
+        <p className="text-xs text-amber-900/60">{(pathsError ?? rolesError)?.message}</p>
+      </div>
+    )
+  }
+
+  const enrollmentCounts: Record<string, number> = {}
+  for (const e of enrollments ?? []) enrollmentCounts[e.path_id] = (enrollmentCounts[e.path_id] ?? 0) + 1
+
+  return (
+    <PathManager
+      paths={(paths ?? []) as LearningPath[]}
+      items={items ?? []}
+      pathTargets={(pathTargets ?? []) as LearningPathTarget[]}
+      enrollmentCounts={enrollmentCounts}
+      roles={(roles ?? []) as JobRole[]}
+      modules={((modules ?? []) as Pick<Module, 'id' | 'title' | 'category' | 'estimated_minutes'>[]).filter(m => !isProtectedModule(m.id))}
+      people={((people ?? []) as Pick<Profile, 'id' | 'full_name' | 'department' | 'company' | 'role' | 'manager_id' | 'job_role_id' | 'is_active'>[]).filter(p => p.is_active !== false)}
+      currentUserId={userId}
+    />
+  )
+}
