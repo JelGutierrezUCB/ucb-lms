@@ -4,12 +4,12 @@ import { Header } from '@/components/layout/Header'
 import { LearningTabs, type LearningTab } from '@/components/learning/LearningTabs'
 import { JourneyBuilderContent } from '@/components/learning/JourneyBuilderContent'
 import { AssignmentRulesContent } from '@/components/learning/AssignmentRulesContent'
-import { MyJourneysContent } from '@/components/learning/MyJourneysContent'
 
 export const dynamic = 'force-dynamic'
 
 // One home for everything about learning journeys and assigning courses:
-// build journeys, set assignment rules, and see your own journeys.
+// build journeys and set assignment rules. (Admins see their own journeys in
+// the learner view.)
 export default async function LearningManagementPage({
   searchParams,
 }: {
@@ -23,7 +23,7 @@ export default async function LearningManagementPage({
   if (profile?.role !== 'admin') redirect('/dashboard')
 
   const { tab } = await searchParams
-  const active: LearningTab = tab === 'rules' || tab === 'my' ? tab : 'builder'
+  const active: LearningTab = tab === 'rules' ? 'rules' : 'builder'
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
@@ -32,7 +32,6 @@ export default async function LearningManagementPage({
         <LearningTabs active={active} />
         {active === 'builder' && <JourneyBuilderContent userId={user.id} />}
         {active === 'rules' && <AssignmentRulesContent userId={user.id} />}
-        {active === 'my' && <MyJourneysContent userId={user.id} />}
       </main>
     </div>
   )

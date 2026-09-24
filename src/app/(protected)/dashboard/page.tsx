@@ -6,6 +6,7 @@ import { BookOpen, CheckCircle, Clock, TrendingUp, Target, Award, Download, Aler
 import Link from 'next/link'
 import { getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
 import { loadUserPaths } from '@/lib/learning-paths'
+import { getPortalView } from '@/lib/view'
 import { NextStepHero, type NextAction } from '@/components/dashboard/NextStepHero'
 import { JourneyDots } from '@/components/paths/JourneyDots'
 import { ProgressRing } from '@/components/ui/progress-ring'
@@ -26,9 +27,12 @@ export default async function DashboardPage() {
 
   if (!profile) redirect('/login')
 
-  // Admins go to their dedicated dashboard
-  if (profile.role === 'admin') redirect('/admin')
-  if (profile.role === 'manager') redirect('/manager')
+  // Admins and managers go to their own console's dashboard — unless they've
+  // switched to the learner view, where this is their personal learning dashboard.
+  if ((await getPortalView(profile.role)) === 'admin') {
+    if (profile.role === 'admin') redirect('/admin')
+    if (profile.role === 'manager') redirect('/manager')
+  }
 
   // Employee dashboard. One assignment row per training when specific
   // trainings (not the whole module) were assigned, so group by module —

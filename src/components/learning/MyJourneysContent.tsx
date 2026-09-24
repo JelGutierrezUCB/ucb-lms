@@ -5,7 +5,7 @@ import { JourneyRoadmap } from '@/components/paths/JourneyRoadmap'
 import { Route } from 'lucide-react'
 
 // The signed-in person's own learning journeys, drawn as road roadmaps.
-// Used on the learner page (/paths) and as a tab in Learning Management.
+// Used on the learner page (/paths), in the learner view.
 export async function MyJourneysContent({ userId }: { userId: string }) {
   const supabase = await createClient()
 

@@ -10,10 +10,6 @@ export default async function LearningPathsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Admins see their own journeys as a tab in Learning Management.
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role === 'admin') redirect('/admin/learning?tab=my')
-
   return (
     <div className="flex flex-col flex-1 overflow-auto">
       <Header title="My Learning Journeys" />
