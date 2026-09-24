@@ -11,7 +11,7 @@ import { JourneyDots } from '@/components/paths/JourneyDots'
 import { ProgressRing } from '@/components/ui/progress-ring'
 import { isProtectedModule } from '@/lib/protected-modules'
 import { AssignedTrainings, type DashboardTraining } from '@/components/dashboard/AssignedTrainings'
-import type { Profile, Module, Assignment, Certificate } from '@/types'
+import type { Profile, Module, Assignment, Certificate, JourneyCertificate } from '@/types'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -270,6 +270,14 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
     .order('issued_at', { ascending: false }) as { data: Certificate[] | null }
 
+  // Journey certificates (earned by finishing every course in a journey)
+  const { data: myJourneyCertificates } = await supabase
+    .from('journey_certificates')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('issued_at', { ascending: false }) as { data: JourneyCertificate[] | null }
+  const journeyCerts = myJourneyCertificates ?? []
+
   return (
     <div className="flex flex-col flex-1 overflow-auto">
       <Header title="Dashboard" />
@@ -454,7 +462,7 @@ export default async function DashboardPage() {
             <CardTitle>My Certificates</CardTitle>
           </CardHeader>
           <CardContent>
-            {!myCertificates || myCertificates.length === 0 ? (
+            {(!myCertificates || myCertificates.length === 0) && journeyCerts.length === 0 ? (
               <div className="text-center py-10">
                 <Award className="h-10 w-10 text-slate-300 mx-auto mb-2" />
                 <p className="text-slate-500 font-medium text-sm">No certificates yet</p>
@@ -462,7 +470,31 @@ export default async function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {myCertificates.map(cert => (
+                {journeyCerts.map(jc => (
+                  <div key={jc.id} className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+                    <div className="h-9 w-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                      <Award className="h-4 w-4 text-amber-700" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-900 text-sm truncate">
+                        {jc.journey_title}
+                        <span className="ml-2 rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">Journey</span>
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Issued {formatDate(jc.issued_at)} · all {jc.courses_count} {jc.courses_count === 1 ? 'course' : 'courses'} completed
+                      </p>
+                    </div>
+                    <a
+                      href={`/api/certificate?journeyCertificateId=${jc.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline shrink-0"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Download
+                    </a>
+                  </div>
+                ))}
+                {(myCertificates ?? []).map(cert => (
                   <div key={cert.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
                     <div className="h-9 w-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
                       <Award className="h-4 w-4 text-green-600" />

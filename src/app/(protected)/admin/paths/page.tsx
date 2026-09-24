@@ -27,7 +27,7 @@ export default async function PathBuilderPage() {
   ] = await Promise.all([
     supabase.from('learning_paths').select('*').order('created_at', { ascending: false }),
     supabase.from('job_roles').select('*').order('name'),
-    supabase.from('learning_path_items').select('path_id, module_id, order_index').order('order_index'),
+    supabase.from('learning_path_items').select('path_id, module_id, order_index, phase, note').order('order_index'),
     supabase.from('learning_path_targets').select('path_id, kind, value'),
     supabase.from('learning_path_enrollments').select('path_id'),
     supabase.from('modules').select('id, title, category, estimated_minutes').order('title'),

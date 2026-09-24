@@ -8,6 +8,9 @@ export interface PathStep {
   percent: number
   // First unfinished section in the module, for "Next up" hints.
   nextSectionTitle: string | null
+  // Roadmap details set by the admin: the phase this step belongs to, and a short note.
+  phase: string | null
+  note: string | null
 }
 
 export interface UserPath {
@@ -22,6 +25,8 @@ export interface UserPath {
   minutesLeft: number
   // First step that isn't finished yet; null once the whole path is done.
   nextStep: PathStep | null
+  // The whole-journey completion certificate, once every course is done.
+  certificate: { id: string; issuedAt: string } | null
 }
 
 // Loads the learning paths a user is enrolled in, with per-step progress.
@@ -45,9 +50,16 @@ export async function loadUserPaths(supabase: Db, userId: string): Promise<UserP
 
   const { data: items } = await supabase
     .from('learning_path_items')
-    .select('path_id, order_index, module:modules(id, title, category, estimated_minutes, module_type)')
+    .select('path_id, order_index, phase, note, module:modules(id, title, category, estimated_minutes, module_type)')
     .in('path_id', pathIds)
     .order('order_index')
+
+  // Journey certificates (empty until the certificates migration exists / anything is earned)
+  const { data: journeyCerts } = await supabase
+    .from('journey_certificates')
+    .select('id, path_id, issued_at')
+    .eq('user_id', userId)
+  const certByPath = new Map((journeyCerts ?? []).map(c => [c.path_id as string, { id: c.id as string, issuedAt: c.issued_at as string }]))
 
   const moduleIds = [...new Set((items ?? []).map((i: any) => (Array.isArray(i.module) ? i.module[0] : i.module)?.id).filter(Boolean))] as string[]
 
@@ -69,22 +81,28 @@ export async function loadUserPaths(supabase: Db, userId: string): Promise<UserP
     sectionsByModule.set(s.module_id, list)
   }
 
-  const stepFor = (mod: PathStep['module']): PathStep => {
+  const stepFor = (mod: PathStep['module'], phase: string | null, note: string | null): PathStep => {
     const secs = sectionsByModule.get(mod.id) ?? []
     const completed = secs.filter(s => done.has(s.id)).length
     return {
       module: mod,
       percent: secs.length > 0 ? Math.round((completed / secs.length) * 100) : 0,
       nextSectionTitle: secs.find(s => !done.has(s.id))?.title ?? null,
+      phase,
+      note,
     }
   }
 
   const result: UserPath[] = enrolled.map(e => {
     const steps = (items ?? [])
       .filter((i: any) => i.path_id === e.path!.id)
-      .map((i: any) => (Array.isArray(i.module) ? i.module[0] : i.module) as PathStep['module'] | null)
-      .filter((m): m is PathStep['module'] => !!m)
-      .map(stepFor)
+      .map((i: any) => ({
+        module: (Array.isArray(i.module) ? i.module[0] : i.module) as PathStep['module'] | null,
+        phase: ((i.phase as string | null)?.trim() || null),
+        note: ((i.note as string | null)?.trim() || null),
+      }))
+      .filter((x): x is { module: PathStep['module']; phase: string | null; note: string | null } => !!x.module)
+      .map(x => stepFor(x.module, x.phase, x.note))
 
     const completedSteps = steps.filter(s => s.percent === 100).length
     return {
@@ -97,6 +115,7 @@ export async function loadUserPaths(supabase: Db, userId: string): Promise<UserP
       percent: steps.length > 0 ? Math.round((completedSteps / steps.length) * 100) : 0,
       minutesLeft: steps.reduce((sum, s) => sum + Math.round((s.module.estimated_minutes ?? 0) * (100 - s.percent) / 100), 0),
       nextStep: steps.find(s => s.percent < 100) ?? null,
+      certificate: certByPath.get(e.path!.id) ?? null,
     }
   })
 

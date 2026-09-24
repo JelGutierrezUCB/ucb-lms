@@ -10,6 +10,10 @@ async function generateCertificatePdf(opts: {
   date: string
   scoreLine?: string
   certificateId?: string
+  // Wording overrides, used for whole-journey certificates
+  heading?: string
+  verb?: string
+  closing?: string
 }) {
   const doc = await PDFDocument.create()
   const page = doc.addPage([792, 612]) // landscape letter
@@ -37,18 +41,18 @@ async function generateCertificatePdf(opts: {
   }
 
   centered(opts.company || 'UCB Training Portal', height - 90, bold, 16, green)
-  centered('Certificate of Completion', height - 130, bold, 32, navy)
+  centered(opts.heading ?? 'Certificate of Completion', height - 130, bold, 32, navy)
   page.drawLine({
     start: { x: width / 2 - 60, y: height - 148 }, end: { x: width / 2 + 60, y: height - 148 },
     thickness: 2, color: green,
   })
   centered('This certifies that', height - 190, regular, 14, gray)
   centered(opts.employeeName, height - 235, bold, 26, ink)
-  centered('has successfully completed', height - 275, regular, 14, gray)
+  centered(opts.verb ?? 'has successfully completed', height - 275, regular, 14, gray)
   centered(opts.moduleTitle, height - 315, bold, 20, navy)
   if (opts.scoreLine) centered(opts.scoreLine, height - 350, regular, 12, gray)
   centered(`Completed on ${opts.date}`, height - 380, regular, 12, gray)
-  centered('Congratulations on completing your training!', height - 420, bold, 13, green)
+  centered(opts.closing ?? 'Congratulations on completing your training!', height - 420, bold, 13, green)
   centered('UCB Training Portal', 55, regular, 10, gray)
   if (opts.certificateId) {
     page.drawText(`Certificate ID: ${opts.certificateId.slice(0, 8).toUpperCase()}`, {
@@ -66,6 +70,39 @@ export async function GET(req: NextRequest) {
 
   const { data: requester } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   const admin = await createAdminClient()
+
+  // Whole-journey completion certificate (issued automatically when every
+  // course in a journey has been completed).
+  const journeyCertificateId = req.nextUrl.searchParams.get('journeyCertificateId')
+  if (journeyCertificateId) {
+    const { data: jc } = await admin.from('journey_certificates').select('*').eq('id', journeyCertificateId).single()
+    if (!jc) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    if (requester?.role !== 'admin' && user.id !== jc.user_id) {
+      const { data: target } = await admin.from('profiles').select('manager_id').eq('id', jc.user_id).single()
+      if (!target || target.manager_id !== user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
+    const pdf = await generateCertificatePdf({
+      employeeName: jc.employee_name,
+      company: jc.company,
+      moduleTitle: jc.journey_title,
+      date: formatDate(jc.completed_at),
+      scoreLine: `All ${jc.courses_count} ${jc.courses_count === 1 ? 'course' : 'courses'} completed`,
+      certificateId: jc.id,
+      heading: 'Journey Completion Certificate',
+      verb: 'has successfully completed the learning journey',
+      closing: 'Congratulations on completing your journey!',
+    })
+    return new NextResponse(Buffer.from(pdf), {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="journey-certificate-${jc.journey_title.replace(/[^a-z0-9]+/gi, '-')}.pdf"`,
+      },
+    })
+  }
 
   const certificateId = req.nextUrl.searchParams.get('certificateId')
   if (certificateId) {

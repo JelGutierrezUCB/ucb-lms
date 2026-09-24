@@ -246,6 +246,10 @@ export interface LearningPathItem {
   path_id: string
   module_id: string
   order_index: number
+  // Optional roadmap details: a signpost label shown where a new phase starts
+  // (e.g. "Listen and Learn"), and a short note shown beside the course.
+  phase?: string | null
+  note?: string | null
   module?: Module
 }
 
@@ -272,4 +276,18 @@ export interface LearningPathTarget {
   path_id: string
   kind: LearningPathTargetKind
   value: string
+}
+
+// Issued automatically when someone has earned the certificate for every
+// course in a journey they're enrolled in.
+export interface JourneyCertificate {
+  id: string
+  path_id: string | null
+  user_id: string
+  employee_name: string
+  company: string | null
+  journey_title: string
+  courses_count: number
+  completed_at: string
+  issued_at: string
 }

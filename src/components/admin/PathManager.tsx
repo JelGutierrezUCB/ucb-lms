@@ -25,7 +25,7 @@ import { ACCOUNT_TYPES, Chip, type ModuleLite, type PersonLite } from './journey
 
 interface Props {
   paths: LearningPath[]
-  items: { path_id: string; module_id: string; order_index: number }[]
+  items: { path_id: string; module_id: string; order_index: number; phase?: string | null; note?: string | null }[]
   pathTargets: LearningPathTarget[]
   enrollmentCounts: Record<string, number>
   // Job roles come from the Users section (created on the user form)
@@ -156,7 +156,7 @@ export function PathManager({ paths, items, pathTargets, enrollmentCounts, roles
         <JourneyWizard
           key={editing === 'new' ? 'new' : editing.id}
           path={editing === 'new' ? null : editing}
-          initialModuleIds={editing === 'new' ? [] : itemsFor(editing.id).map(i => i.module_id)}
+          initialSteps={editing === 'new' ? [] : itemsFor(editing.id).map(i => ({ moduleId: i.module_id, phase: i.phase ?? '', note: i.note ?? '' }))}
           initialTargets={editing === 'new' ? [] : targetsFor(editing.id)}
           roles={roles}
           modules={modules}

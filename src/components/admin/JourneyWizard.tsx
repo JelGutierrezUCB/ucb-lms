@@ -29,11 +29,17 @@ const STEPS = [
 // Review & publish. Each step only asks for one kind of decision, and the
 // last step summarises everything (including how many people will get it)
 // before anything is saved.
+export interface StepDraft {
+  moduleId: string
+  phase: string // optional signpost label; blank continues the previous phase
+  note: string // optional short text shown beside the course on the roadmap
+}
+
 export function JourneyWizard({
-  path, initialModuleIds, initialTargets, roles, modules, people, currentUserId, onClose,
+  path, initialSteps, initialTargets, roles, modules, people, currentUserId, onClose,
 }: {
   path: LearningPath | null
-  initialModuleIds: string[]
+  initialSteps: StepDraft[]
   initialTargets: LearningPathTarget[]
   roles: JobRole[]
   modules: ModuleLite[]
@@ -51,7 +57,8 @@ export function JourneyWizard({
   const [title, setTitle] = useState(path?.title ?? '')
   const [description, setDescription] = useState(path?.description ?? '')
   const [kind, setKind] = useState<LearningPathKind>(path?.kind ?? 'learning')
-  const [moduleIds, setModuleIds] = useState<string[]>(initialModuleIds)
+  const [steps, setSteps] = useState<StepDraft[]>(initialSteps)
+  const moduleIds = steps.map(s => s.moduleId)
   const [companies, setCompanies] = useState<string[]>(initialTargets.filter(t => t.kind === 'company').map(t => t.value))
   const [departments, setDepartments] = useState<string[]>(initialTargets.filter(t => t.kind === 'department').map(t => t.value))
   const [roleIds, setRoleIds] = useState<string[]>(initialTargets.filter(t => t.kind === 'job_role').map(t => t.value))
@@ -113,13 +120,16 @@ export function JourneyWizard({
   }
 
   const move = (index: number, delta: number) =>
-    setModuleIds(ids => {
-      const next = [...ids]
+    setSteps(list => {
+      const next = [...list]
       const target = index + delta
-      if (target < 0 || target >= next.length) return ids
+      if (target < 0 || target >= next.length) return list
       ;[next[index], next[target]] = [next[target], next[index]]
       return next
     })
+  const updateStep = (index: number, patch: Partial<StepDraft>) =>
+    setSteps(list => list.map((s, i) => (i === index ? { ...s, ...patch } : s)))
+  const knownPhases = [...new Set(steps.map(s => s.phase.trim()).filter(Boolean))]
 
   async function finish(publish: boolean) {
     setSaving(publish ? 'publish' : 'draft')
@@ -167,10 +177,16 @@ export function JourneyWizard({
         if (targetsError) throw targetsError
       }
 
-      if (moduleIds.length > 0) {
+      if (steps.length > 0) {
         const { error } = await supabase
           .from('learning_path_items')
-          .insert(moduleIds.map((module_id, i) => ({ path_id: pathId, module_id, order_index: i })))
+          .insert(steps.map((s, i) => ({
+            path_id: pathId,
+            module_id: s.moduleId,
+            order_index: i,
+            phase: s.phase.trim() || null,
+            note: s.note.trim() || null,
+          })))
         if (error) throw error
       }
 
@@ -313,43 +329,69 @@ export function JourneyWizard({
           {step === 1 && (
             <div className="space-y-4">
               <p className="text-sm text-slate-500">
-                Add the trainings people should complete, then put them in the order you want them taken. Learners see them as
-                numbered steps on a roadmap.
+                Add the courses people must complete, in the order you want them taken. Learners see them as pins along a road,
+                and earn a journey certificate once every course is done. Optionally group courses into <span className="font-medium">phases</span> (a
+                signpost appears where each phase starts) and add a short <span className="font-medium">note</span> that shows beside the course.
               </p>
 
-              {moduleIds.length === 0 ? (
+              {steps.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">
-                  No trainings yet — add your first one below.
+                  No courses yet — add your first one below.
                 </p>
               ) : (
                 <ol className="space-y-2">
-                  {moduleIds.map((id, i) => {
-                    const m = moduleById.get(id)
+                  {steps.map((s, i) => {
+                    const m = moduleById.get(s.moduleId)
                     return (
-                      <li key={id} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
-                          {i + 1}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-slate-800">{m?.title ?? 'Unavailable training'}</p>
-                          {m && <p className="text-xs text-slate-400">{getCategoryLabel(m.category)} · {m.estimated_minutes} min</p>}
+                      <li key={s.moduleId} className="rounded-xl border border-slate-200 bg-white p-3">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+                            {i + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-slate-800">{m?.title ?? 'Unavailable training'}</p>
+                            {m && <p className="text-xs text-slate-400">{getCategoryLabel(m.category)} · {m.estimated_minutes} min</p>}
+                          </div>
+                          <Button type="button" variant="ghost" size="icon" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up">
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="ghost" size="icon" onClick={() => move(i, 1)} disabled={i === steps.length - 1} aria-label="Move down">
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="ghost" size="icon" onClick={() => setSteps(list => list.filter((_, idx) => idx !== i))} aria-label="Remove" className="text-slate-400 hover:text-red-600">
+                            <X className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <Button type="button" variant="ghost" size="icon" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up">
-                          <ArrowUp className="h-4 w-4" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" onClick={() => move(i, 1)} disabled={i === moduleIds.length - 1} aria-label="Move down">
-                          <ArrowDown className="h-4 w-4" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" onClick={() => setModuleIds(ids => ids.filter(x => x !== id))} aria-label="Remove" className="text-slate-400 hover:text-red-600">
-                          <X className="h-4 w-4" />
-                        </Button>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-[190px_1fr] sm:pl-10">
+                          <Input
+                            value={s.phase}
+                            onChange={e => updateStep(i, { phase: e.target.value })}
+                            placeholder="Phase (optional)"
+                            list="journey-phases"
+                            aria-label={`Phase for step ${i + 1}`}
+                          />
+                          <Input
+                            value={s.note}
+                            onChange={e => updateStep(i, { note: e.target.value })}
+                            placeholder="Short note shown beside this course (optional)"
+                            aria-label={`Note for step ${i + 1}`}
+                          />
+                        </div>
                       </li>
                     )
                   })}
                 </ol>
               )}
+              <datalist id="journey-phases">
+                {knownPhases.map(p => <option key={p} value={p} />)}
+              </datalist>
+              {steps.length > 0 && (
+                <p className="text-xs text-slate-400">
+                  Tip: type a phase name (e.g. &ldquo;Listen and Learn&rdquo;) on the first course of each phase. Courses with the phase left blank stay in the phase above them.
+                </p>
+              )}
 
-              <Select value="" onValueChange={v => { if (v) setModuleIds(ids => [...ids, v]) }}>
+              <Select value="" onValueChange={v => { if (v) setSteps(list => [...list, { moduleId: v, phase: '', note: '' }]) }}>
                 <SelectTrigger disabled={available.length === 0}>
                   <SelectValue placeholder={available.length === 0 ? 'Every training has been added' : 'Add a training…'} />
                 </SelectTrigger>
@@ -472,12 +514,22 @@ export function JourneyWizard({
                   <p className="text-sm text-amber-700">No trainings added yet.</p>
                 ) : (
                   <ol className="space-y-0.5 text-sm text-slate-700">
-                    {moduleIds.map((id, i) => (
-                      <li key={id} className="truncate">
-                        <span className="mr-1.5 text-slate-400">{i + 1}.</span>
-                        {moduleById.get(id)?.title ?? 'Unavailable training'}
-                      </li>
-                    ))}
+                    {steps.map((s, i) => {
+                      const phase = s.phase.trim()
+                      const startsPhase = !!phase && phase !== steps.slice(0, i).map(x => x.phase.trim()).filter(Boolean).at(-1)
+                      return (
+                        <li key={s.moduleId}>
+                          {startsPhase && (
+                            <p className="mb-0.5 mt-2 text-xs font-semibold uppercase tracking-wide text-blue-700 first:mt-0">{phase}</p>
+                          )}
+                          <p className="truncate">
+                            <span className="mr-1.5 text-slate-400">{i + 1}.</span>
+                            {moduleById.get(s.moduleId)?.title ?? 'Unavailable training'}
+                            {s.note.trim() && <span className="ml-2 text-xs text-slate-400">— {s.note.trim()}</span>}
+                          </p>
+                        </li>
+                      )
+                    })}
                   </ol>
                 )}
               </ReviewBlock>
