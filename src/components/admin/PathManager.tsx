@@ -449,7 +449,7 @@ function PathEditorDialog({
             </div>
 
             <div className="space-y-1.5">
-              <p className="text-sm font-medium text-slate-700">Manager (their team)</p>
+              <p className="text-sm font-medium text-slate-700">Manager</p>
               {supervisorOptions.length === 0 ? (
                 <p className="text-xs text-slate-400">No managers assigned yet — set a manager on a user in the Users page.</p>
               ) : (
