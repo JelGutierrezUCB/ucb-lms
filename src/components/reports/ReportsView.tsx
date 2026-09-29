@@ -254,6 +254,78 @@ export function ReportsView({ employees, modules, assignments: rawAssignments, s
     return employees
   }, [activeTab, employees, officeEmployees])
 
+  // Quiz activity grouped by course (module) rather than by employee — total
+  // scores, who's taken it, when, how many tries, and each try's date. Scoped
+  // to whichever employees are in view (All vs Office; Production has its own tab).
+  const [expandedQuizModule, setExpandedQuizModule] = useState<string | null>(null)
+  const quizActivityByCourse = useMemo(() => {
+    const employeeById = new Map(tabEmployees.map(e => [e.id, e]))
+    type Try = { employeeId: string; name: string; department: string; tryNumber: number; totalTries: number; score: number; maxScore: number; pct: number; completedAt: string }
+
+    const attemptsByModule = new Map<string, typeof quizAttempts>()
+    for (const qa of quizAttempts) {
+      if (!employeeById.has(qa.user_id)) continue
+      const moduleId = contentBlockToModule[qa.content_block_id]
+      if (!moduleId) continue
+      const list = attemptsByModule.get(moduleId) ?? []
+      list.push(qa)
+      attemptsByModule.set(moduleId, list)
+    }
+
+    return modules
+      .filter(m => contentTypesByModule[m.id]?.quiz)
+      .map(m => {
+        const attempts = attemptsByModule.get(m.id) ?? []
+        const triesByEmployee = new Map<string, typeof attempts>()
+        for (const a of attempts) {
+          const list = triesByEmployee.get(a.user_id) ?? []
+          list.push(a)
+          triesByEmployee.set(a.user_id, list)
+        }
+
+        const rows: Try[] = []
+        for (const [employeeId, tries] of triesByEmployee) {
+          const emp = employeeById.get(employeeId)
+          const sorted = [...tries].sort((a, b) => a.completed_at.localeCompare(b.completed_at))
+          sorted.forEach((a, i) => {
+            rows.push({
+              employeeId,
+              name: emp?.full_name ?? 'Unknown',
+              department: emp?.department ?? '',
+              tryNumber: i + 1,
+              totalTries: sorted.length,
+              score: a.score,
+              maxScore: a.max_score,
+              pct: a.max_score > 0 ? Math.round((a.score / a.max_score) * 100) : 0,
+              completedAt: a.completed_at,
+            })
+          })
+        }
+        rows.sort((a, b) => a.name.localeCompare(b.name) || a.tryNumber - b.tryNumber)
+
+        const scored = attempts.filter(a => a.max_score > 0)
+        const avgPct = scored.length > 0
+          ? Math.round(scored.reduce((s, a) => s + (a.score / a.max_score) * 100, 0) / scored.length)
+          : null
+        const uniqueTakers = triesByEmployee.size
+        const passed = [...triesByEmployee.values()].filter(tries =>
+          tries.some(a => a.max_score > 0 && (a.score / a.max_score) * 100 >= 70)
+        ).length
+
+        return {
+          id: m.id,
+          title: m.title,
+          category: m.category,
+          totalAttempts: attempts.length,
+          uniqueTakers,
+          avgPct,
+          passed,
+          rows,
+        }
+      })
+      .sort((a, b) => b.totalAttempts - a.totalAttempts || a.title.localeCompare(b.title))
+  }, [modules, contentTypesByModule, quizAttempts, contentBlockToModule, tabEmployees])
+
   // Per-employee summary
   const employeeData = useMemo(() => tabEmployees.map(emp => {
     const empAssignments = assignments.filter(a => a.user_id === emp.id)
@@ -924,6 +996,91 @@ export function ReportsView({ employees, modules, assignments: rawAssignments, s
           </table>
         </div>
       </Card>
+
+      {/* Quiz Activity by Course — total scores, who's taken it, when, how many
+          tries, and each try's date, grouped per course rather than per employee. */}
+      {quizActivityByCourse.length > 0 && (
+        <Card>
+          <div className="p-4 border-b border-slate-100">
+            <h3 className="font-semibold text-slate-800">Quiz Activity by Course</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Click a course to see every attempt — who took it, when, and how many tries.</p>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {quizActivityByCourse.map(course => {
+              const isOpen = expandedQuizModule === course.id
+              return (
+                <div key={course.id}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedQuizModule(isOpen ? null : course.id)}
+                    className="w-full flex items-center gap-4 px-4 py-3 text-left hover:bg-slate-50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-900 truncate">{course.title}</p>
+                      <p className="text-xs text-slate-400">{getCategoryLabel(course.category)}</p>
+                    </div>
+                    <div className="hidden sm:block text-center w-24">
+                      <p className="text-sm font-semibold text-slate-800">{course.uniqueTakers}</p>
+                      <p className="text-xs text-slate-400">taken by</p>
+                    </div>
+                    <div className="hidden sm:block text-center w-24">
+                      <p className="text-sm font-semibold text-slate-800">{course.totalAttempts}</p>
+                      <p className="text-xs text-slate-400">total tries</p>
+                    </div>
+                    <div className="text-center w-20">
+                      {course.avgPct !== null ? (
+                        <Badge variant={course.avgPct >= 70 ? 'success' : 'danger'}>{course.avgPct}% avg</Badge>
+                      ) : (
+                        <span className="text-xs text-slate-300">No scores</span>
+                      )}
+                    </div>
+                    {isOpen ? <ChevronUp className="h-4 w-4 text-slate-400 shrink-0" /> : <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />}
+                  </button>
+
+                  {isOpen && (
+                    <div className="px-4 pb-4">
+                      {course.rows.length === 0 ? (
+                        <p className="text-sm text-slate-400 py-3">No one has taken this quiz yet.</p>
+                      ) : (
+                        <div className="overflow-x-auto rounded-lg border border-slate-200">
+                          <table className="w-full text-xs">
+                            <thead className="bg-slate-50">
+                              <tr>
+                                <th className="text-left px-3 py-2 font-medium text-slate-600">Employee</th>
+                                <th className="text-left px-3 py-2 font-medium text-slate-600">Department</th>
+                                <th className="text-center px-3 py-2 font-medium text-slate-600">Try</th>
+                                <th className="text-center px-3 py-2 font-medium text-slate-600">Score</th>
+                                <th className="text-center px-3 py-2 font-medium text-slate-600">Result</th>
+                                <th className="text-left px-3 py-2 font-medium text-slate-600">Completed</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 bg-white">
+                              {course.rows.map((r) => (
+                                <tr key={`${r.employeeId}-${r.tryNumber}`}>
+                                  <td className="px-3 py-2 font-medium text-slate-800">{r.name}</td>
+                                  <td className="px-3 py-2 text-slate-500">{r.department || '—'}</td>
+                                  <td className="px-3 py-2 text-center text-slate-600">{r.tryNumber} of {r.totalTries}</td>
+                                  <td className="px-3 py-2 text-center font-medium">{r.score}/{r.maxScore} ({r.pct}%)</td>
+                                  <td className="px-3 py-2 text-center">
+                                    <Badge variant={r.pct >= 70 ? 'success' : 'danger'} className="text-xs">
+                                      {r.pct >= 70 ? 'Passed' : 'Failed'}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-500">{formatDate(r.completedAt)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
 
       </> /* end All/Office tab */}
 
