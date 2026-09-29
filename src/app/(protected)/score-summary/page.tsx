@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
+import { getProxyTarget } from '@/lib/proxy'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatDate, getCategoryLabel } from '@/lib/utils'
@@ -16,10 +17,14 @@ export default async function ScoreSummaryPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const proxyTarget = await getProxyTarget(user.id, profile?.role)
+  const effectiveUserId = proxyTarget?.id ?? user.id
+
   const { data: quizAttempts } = await supabase
     .from('quiz_attempts')
     .select('id, content_block_id, score, max_score, completed_at')
-    .eq('user_id', user.id)
+    .eq('user_id', effectiveUserId)
     .order('completed_at', { ascending: false })
 
   const attempts = quizAttempts ?? []
@@ -80,7 +85,7 @@ export default async function ScoreSummaryPage() {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="My Score Summary" />
+      <Header title={proxyTarget ? `${proxyTarget.full_name}'s Score Summary` : 'My Score Summary'} />
       <main className="flex-1 p-6 space-y-6">
         {attempts.length === 0 ? (
           <div className="text-center py-20">

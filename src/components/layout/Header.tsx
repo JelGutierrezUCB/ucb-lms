@@ -29,6 +29,14 @@ export function Header({ title }: { title?: string }) {
     router.push('/login')
   }
 
+  // Returning from someone else's portal: managers land back on their own
+  // training (the original warehouse-proxy behavior); admins land on Users,
+  // where they most likely started this from.
+  const handleEndProxy = () => {
+    endProxy()
+    router.push(profile?.role === 'admin' ? '/admin/users' : '/training')
+  }
+
   return (
     <header className="h-16 border-b border-slate-200 bg-white px-4 sm:px-6 flex items-center justify-between gap-2 shrink-0">
       <div className="flex items-center gap-2 min-w-0">
@@ -48,9 +56,9 @@ export function Header({ title }: { title?: string }) {
         {proxyUser && (
           <div className="flex items-center gap-2 rounded-full bg-amber-50 border border-amber-200 px-3 py-1.5 text-sm">
             <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-            <span className="text-amber-700 font-medium">Training as: {proxyUser.full_name}</span>
+            <span className="text-amber-700 font-medium">Viewing as: {proxyUser.full_name}</span>
             <button
-              onClick={() => { endProxy(); router.push('/training') }}
+              onClick={handleEndProxy}
               className="ml-1 text-amber-600 hover:text-amber-800 font-semibold text-xs underline"
             >
               End Session

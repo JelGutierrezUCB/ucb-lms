@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import { useMobileNav } from '@/contexts/MobileNavContext'
 import { useView } from '@/contexts/ViewContext'
+import { useProxy } from '@/contexts/ProxyContext'
 
 interface NavItem {
   href: string
@@ -63,10 +64,13 @@ function SidebarBody() {
   const pathname = usePathname()
   const { profile } = useAuth()
   const { view, canSwitch, setView } = useView()
+  const { proxyUser } = useProxy()
 
   if (!profile) return null
 
-  const learnerView = view === 'learner'
+  // Viewing someone else's portal always shows the learner nav — the point is
+  // to see exactly what they see, regardless of the admin/manager's own view preference.
+  const learnerView = view === 'learner' || !!proxyUser
   const items = learnerView ? learnerItems : adminItems.filter(item => item.roles.includes(profile.role))
   const consoleName = profile.role === 'admin' ? 'Admin' : 'Manager'
 
@@ -88,8 +92,16 @@ function SidebarBody() {
         </div>
       </div>
 
+      {/* Viewing someone else's portal — shown instead of the view switcher */}
+      {proxyUser && (
+        <div className="mx-3 mt-3 rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2">
+          <p className="text-xs font-semibold text-amber-400">Viewing as</p>
+          <p className="text-sm text-white truncate">{proxyUser.full_name}</p>
+        </div>
+      )}
+
       {/* View switcher: admins and managers can move between their console and the learner view */}
-      {canSwitch && (
+      {canSwitch && !proxyUser && (
         <div className="px-3 pt-3">
           <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-800 p-1 text-xs font-semibold" role="group" aria-label="Switch view">
             {([['admin', consoleName], ['learner', 'Learner']] as const).map(([key, label]) => (

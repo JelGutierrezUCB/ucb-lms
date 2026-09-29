@@ -1,9 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Search, Pencil, Trash2, UserX, UserCheck, EyeOff, Eye, Upload, KeyRound } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Plus, Search, Pencil, Trash2, UserX, UserCheck, EyeOff, Eye, Upload, KeyRound, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { useProxy } from '@/contexts/ProxyContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -37,6 +39,8 @@ const roleBadgeVariant = (role: string) =>
   role === 'admin' ? 'default' : role === 'manager' ? 'warning' : 'outline'
 
 export function UserManagement({ initialProfiles, currentUserRole, currentUserId, jobRoles = [] }: Props) {
+  const router = useRouter()
+  const { startProxy } = useProxy()
   const [profiles, setProfiles] = useState(initialProfiles)
   // Job roles are created here, on the user form; Journey Builder just reads them.
   const [roles, setRoles] = useState<JobRole[]>(jobRoles)
@@ -221,6 +225,15 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
     setEditUser(user)
   }
 
+  // Opens the person's own learner portal (dashboard, training, journeys,
+  // history) exactly as they see it — mirrors the manager "Start Training"
+  // proxy, just entered from Users instead of the employee list.
+  const handleViewPortal = (user: Profile) => {
+    startProxy(user)
+    toast.success(`Viewing ${user.full_name}'s portal`)
+    router.push('/dashboard')
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -340,6 +353,15 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                       {currentUserRole === 'admin' && (
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
+                            {user.id !== currentUserId && user.role !== 'admin' && user.is_active !== false && (
+                              <button
+                                onClick={() => handleViewPortal(user)}
+                                className="p-1.5 rounded text-slate-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+                                title="View this person's portal"
+                              >
+                                <LogIn className="h-4 w-4" />
+                              </button>
+                            )}
                             <button
                               onClick={() => openEdit(user)}
                               className="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"

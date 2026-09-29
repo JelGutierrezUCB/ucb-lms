@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { BookOpen } from 'lucide-react'
 import { CatalogGrid, type CatalogItem } from '@/components/training/CatalogGrid'
 import { isProtectedModule } from '@/lib/protected-modules'
+import { getProxyTarget } from '@/lib/proxy'
 import type { Module } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -39,6 +40,14 @@ export default async function TrainingPage({
     ) {
       effectiveUserId = targetProfile.id
       proxyName = targetProfile.full_name
+    }
+  } else {
+    // No explicit ?as= — fall back to an active "view this person's portal"
+    // session (set from the admin Users page, or the manager's employee list).
+    const proxyTarget = await getProxyTarget(user.id, currentProfile?.role)
+    if (proxyTarget) {
+      effectiveUserId = proxyTarget.id
+      proxyName = proxyTarget.full_name
     }
   }
 

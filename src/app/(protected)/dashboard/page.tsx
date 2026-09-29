@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
 import { loadUserPaths } from '@/lib/learning-paths'
 import { getPortalView } from '@/lib/view'
+import { getProxyTarget } from '@/lib/proxy'
 import { NextStepHero, type NextAction } from '@/components/dashboard/NextStepHero'
 import { JourneyDots } from '@/components/paths/JourneyDots'
 import { ProgressRing } from '@/components/ui/progress-ring'
@@ -27,9 +28,15 @@ export default async function DashboardPage() {
 
   if (!profile) redirect('/login')
 
+  // An admin/manager viewing someone else's learner portal — everything below
+  // is scoped to that person instead of the signed-in admin/manager.
+  const proxyTarget = await getProxyTarget(user.id, profile.role)
+  const effectiveUserId = proxyTarget?.id ?? user.id
+
   // Admins and managers go to their own console's dashboard — unless they've
-  // switched to the learner view, where this is their personal learning dashboard.
-  if ((await getPortalView(profile.role)) === 'admin') {
+  // switched to the learner view (this is their personal learning dashboard
+  // then), or they're viewing someone else's portal, which always shows here.
+  if (!proxyTarget && (await getPortalView(profile.role)) === 'admin') {
     if (profile.role === 'admin') redirect('/admin')
     if (profile.role === 'manager') redirect('/manager')
   }
@@ -40,7 +47,7 @@ export default async function DashboardPage() {
   const { data: assignments } = await supabase
     .from('assignments')
     .select('*, module:modules(*)')
-    .eq('user_id', user.id)
+    .eq('user_id', effectiveUserId)
     .order('assigned_at', { ascending: false }) as { data: (Assignment & { module: Module })[] | null }
 
   const moduleIds = [...new Set((assignments ?? []).map(a => a.module_id))]
@@ -55,7 +62,7 @@ export default async function DashboardPage() {
   const { data: completedSections } = await supabase
     .from('section_progress')
     .select('section_id, completed_at, sections!inner(module_id, is_archived)')
-    .eq('user_id', user.id)
+    .eq('user_id', effectiveUserId)
     .eq('sections.is_archived', false)
 
   // Per module: null = whole module required; a Set = only these specific
@@ -150,7 +157,7 @@ export default async function DashboardPage() {
     .sort((a, b) => (b.lastActivity ?? '').localeCompare(a.lastActivity ?? ''))[0] ?? null
 
   // Learning paths (job-role / onboarding sequences). Empty until paths exist.
-  const userPaths = (await loadUserPaths(supabase, user.id)).filter(p => p.percent < 100)
+  const userPaths = (await loadUserPaths(supabase, effectiveUserId)).filter(p => p.percent < 100)
 
   // The one thing to do next, in priority order: something overdue, then the
   // next step of an onboarding journey, then whatever was started most
@@ -265,7 +272,7 @@ export default async function DashboardPage() {
   const { data: quizAttempts } = await supabase
     .from('quiz_attempts')
     .select('score, max_score')
-    .eq('user_id', user.id)
+    .eq('user_id', effectiveUserId)
   const scoredAttempts = (quizAttempts ?? []).filter(a => a.max_score > 0)
   const avgScore = scoredAttempts.length > 0
     ? Math.round(scoredAttempts.reduce((s, a) => s + (a.score / a.max_score) * 100, 0) / scoredAttempts.length)
@@ -275,20 +282,20 @@ export default async function DashboardPage() {
   const { data: myCertificates } = await supabase
     .from('certificates')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', effectiveUserId)
     .order('issued_at', { ascending: false }) as { data: Certificate[] | null }
 
   // Journey certificates (earned by finishing every course in a journey)
   const { data: myJourneyCertificates } = await supabase
     .from('journey_certificates')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', effectiveUserId)
     .order('issued_at', { ascending: false }) as { data: JourneyCertificate[] | null }
   const journeyCerts = myJourneyCertificates ?? []
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Dashboard" />
+      <Header title={proxyTarget ? `${proxyTarget.full_name}'s Dashboard` : 'Dashboard'} />
 
       <main className="flex-1 p-6 space-y-6">
         {/* Welcome banner */}
@@ -302,7 +309,7 @@ export default async function DashboardPage() {
           </div>
           <div className="sm:border-l sm:border-white/20 sm:pl-6">
             <p className="text-xs uppercase tracking-widest text-[#7CC24A] font-semibold">UCB Training Portal</p>
-            <h2 className="text-xl font-bold">Welcome back, {profile.full_name.split(' ')[0]}!</h2>
+            <h2 className="text-xl font-bold">Welcome back, {(proxyTarget?.full_name ?? profile.full_name).split(' ')[0]}!</h2>
             <p className="text-sm text-white/70 mt-0.5">You're crushing it — keep that training streak alive! 🌱</p>
           </div>
         </div>
