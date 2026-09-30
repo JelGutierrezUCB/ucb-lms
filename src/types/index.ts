@@ -229,12 +229,13 @@ export interface ModuleWithProgress extends Module {
   is_assigned?: boolean
 }
 
+// Colors are restricted to the brand palette (navy, green, brown, orange).
 export const MODULE_CATEGORIES = [
-  { value: 'onboarding', label: 'Onboarding', color: '#7c3aed' },
-  { value: 'sales', label: 'Sales', color: '#0891b2' },
-  { value: 'warehouse', label: 'Warehouse', color: '#b45309' },
-  { value: 'ucbzerowaste', label: 'UCBZeroWaste', color: '#15803d' },
-  { value: 'general', label: 'General', color: '#1e40af' },
+  { value: 'onboarding', label: 'Onboarding', color: '#281D73' },
+  { value: 'sales', label: 'Sales', color: '#E25820' },
+  { value: 'warehouse', label: 'Warehouse', color: '#714F36' },
+  { value: 'ucbzerowaste', label: 'UCBZeroWaste', color: '#609D3B' },
+  { value: 'general', label: 'General', color: '#281D73' },
 ] as const
 
 export interface JobRole {

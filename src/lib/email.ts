@@ -44,7 +44,7 @@ export function welcomeEmailHtml(opts: { fullName: string; email: string; passwo
       <p style="margin: 4px 0; color: #1e293b;"><strong>Email:</strong> ${opts.email}</p>
       <p style="margin: 4px 0; color: #1e293b;"><strong>Temporary password:</strong> ${opts.password}</p>
     </div>
-    <a href="${opts.loginUrl}" style="display: inline-block; background: #1e40af; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">Log In</a>
+    <a href="${opts.loginUrl}" style="display: inline-block; background: #281D73; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">Log In</a>
   `)
 }
 
@@ -55,7 +55,7 @@ export function passwordChangedEmailHtml(opts: { fullName: string; password: str
     <div style="background: #f8fafc; border-radius: 8px; padding: 16px; margin: 16px 0;">
       <p style="margin: 4px 0; color: #1e293b;"><strong>New password:</strong> ${opts.password}</p>
     </div>
-    <a href="${opts.loginUrl}" style="display: inline-block; background: #1e40af; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">Log In</a>
+    <a href="${opts.loginUrl}" style="display: inline-block; background: #281D73; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">Log In</a>
     <p style="color: #94a3b8; font-size: 13px; margin-top: 16px;">If you didn't expect this, contact your admin.</p>
   `)
 }
@@ -64,6 +64,6 @@ export function notificationEmailHtml(opts: { fullName: string; title: string; m
   return wrapper(opts.title, `
     <p style="color: #475569; line-height: 1.6;">Hi ${opts.fullName},</p>
     <p style="color: #475569; line-height: 1.6;">${opts.message}</p>
-    <a href="${opts.link}" style="display: inline-block; background: #1e40af; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">View in Training Portal</a>
+    <a href="${opts.link}" style="display: inline-block; background: #281D73; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">View in Training Portal</a>
   `)
 }

@@ -150,7 +150,7 @@ export default async function AdminDashboardPage() {
       <main className="flex-1 p-6 space-y-6">
 
         {/* Welcome banner */}
-        <div className="rounded-2xl bg-gradient-to-r from-[#241B4E] to-[#3a2d7a] p-6 text-white flex items-center gap-6">
+        <div className="rounded-2xl bg-gradient-to-r from-[#281D73] to-[#402EB8] p-6 text-white flex items-center gap-6">
           <div className="bg-white rounded-xl p-3 shrink-0">
             <img
               src="/branding/ucb-environmental-logo.png"
@@ -159,7 +159,7 @@ export default async function AdminDashboardPage() {
             />
           </div>
           <div className="border-l border-white/20 pl-6">
-            <p className="text-xs uppercase tracking-widest text-[#7CC24A] font-semibold">UCB Training Portal</p>
+            <p className="text-xs uppercase tracking-widest text-[#E25820] font-semibold">UCB Training Portal</p>
             <h2 className="text-xl font-bold">Welcome back, {profile.full_name?.split(' ')[0] ?? 'Admin'}!</h2>
             <p className="text-sm text-white/70 mt-0.5">Growing greener, one completed training at a time. 🌱</p>
           </div>

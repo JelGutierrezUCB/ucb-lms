@@ -303,7 +303,7 @@ export default async function DashboardPage() {
 
       <main className="flex-1 p-6 space-y-6">
         {/* Welcome banner */}
-        <div className="rounded-2xl bg-gradient-to-r from-[#241B4E] to-[#3a2d7a] p-5 sm:p-6 text-white flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+        <div className="rounded-2xl bg-gradient-to-r from-[#281D73] to-[#402EB8] p-5 sm:p-6 text-white flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
           <div className="bg-white rounded-xl p-3 shrink-0 self-start">
             <img
               src="/branding/ucb-environmental-logo.png"
@@ -312,7 +312,7 @@ export default async function DashboardPage() {
             />
           </div>
           <div className="sm:border-l sm:border-white/20 sm:pl-6">
-            <p className="text-xs uppercase tracking-widest text-[#7CC24A] font-semibold">UCB Training Portal</p>
+            <p className="text-xs uppercase tracking-widest text-[#E25820] font-semibold">UCB Training Portal</p>
             <h2 className="text-xl font-bold">Welcome back, {(proxyTarget?.full_name ?? profile.full_name).split(' ')[0]}!</h2>
             <p className="text-sm text-white/70 mt-0.5">{t.dashboard.streak}</p>
           </div>

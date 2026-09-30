@@ -89,7 +89,7 @@ function SidebarBody() {
     <div className="flex flex-col h-full w-64 bg-slate-900 text-white">
       {/* Logo */}
       <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-700">
-        <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg', learnerView ? 'bg-blue-600' : 'bg-violet-600')}>
+        <div className={cn('flex h-9 w-9 items-center justify-center rounded-lg', learnerView ? 'bg-blue-600' : 'bg-brand-brown')}>
           {learnerView ? <GraduationCap className="h-5 w-5 text-white" /> : <Settings2 className="h-5 w-5 text-white" />}
         </div>
         <div>
@@ -119,7 +119,7 @@ function SidebarBody() {
                 className={cn(
                   'rounded-md px-2 py-1.5 transition-colors',
                   view === key
-                    ? key === 'admin' ? 'bg-violet-600 text-white' : 'bg-blue-600 text-white'
+                    ? key === 'admin' ? 'bg-brand-brown text-white' : 'bg-blue-600 text-white'
                     : 'text-slate-400 hover:text-white'
                 )}
               >
@@ -139,7 +139,7 @@ function SidebarBody() {
             className={cn(
               'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
               isActive(item)
-                ? learnerView ? 'bg-blue-600 text-white' : 'bg-violet-600 text-white'
+                ? learnerView ? 'bg-blue-600 text-white' : 'bg-brand-brown text-white'
                 : 'text-slate-300 hover:bg-slate-800 hover:text-white'
             )}
           >
@@ -152,7 +152,7 @@ function SidebarBody() {
       {/* User info at bottom */}
       <div className="px-4 py-4 border-t border-slate-700">
         <div className="flex items-center gap-3">
-          <div className={cn('flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold shrink-0', learnerView ? 'bg-blue-600' : 'bg-violet-600')}>
+          <div className={cn('flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold shrink-0', learnerView ? 'bg-blue-600' : 'bg-brand-brown')}>
             {profile.full_name.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">

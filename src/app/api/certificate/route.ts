@@ -20,9 +20,9 @@ async function generateCertificatePdf(opts: {
   const { width, height } = page.getSize()
   const bold = await doc.embedFont(StandardFonts.HelveticaBold)
   const regular = await doc.embedFont(StandardFonts.Helvetica)
-  // UCB brand palette (green + navy), used across all four UCB companies.
-  const navy = rgb(0.141, 0.106, 0.306) // ~#241B4E
-  const green = rgb(0.298, 0.604, 0.165) // ~#4C9A2A
+  // UCB brand palette, used across all four UCB companies.
+  const navy = rgb(0.157, 0.114, 0.451) // #281D73
+  const green = rgb(0.376, 0.616, 0.231) // #609D3B
   const gray = rgb(0.45, 0.45, 0.45)
   const ink = rgb(0.1, 0.1, 0.12)
 

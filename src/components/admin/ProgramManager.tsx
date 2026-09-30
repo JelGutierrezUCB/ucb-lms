@@ -23,7 +23,8 @@ import { getCategoryLabel } from '@/lib/utils'
 import type { Program } from '@/types'
 import type { ModuleLite } from './journey-shared'
 
-const PROGRAM_COLORS = ['#0891b2', '#7c3aed', '#b45309', '#15803d', '#1e40af', '#be123c', '#0f766e', '#a16207']
+// Restricted to the brand palette — the only colors the app's branding may use.
+const PROGRAM_COLORS = ['#281D73', '#609D3B', '#714F36', '#E25820']
 
 interface Props {
   programs: Program[]

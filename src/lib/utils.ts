@@ -42,15 +42,17 @@ export function getRoleLabel(role: string): string {
   return { admin: 'Admin', manager: 'Manager', employee: 'Employee' }[role] ?? role
 }
 
+// Restricted to the brand palette (navy, green, brown, orange) — no other
+// hues, even per-category ones, so category swatches stay on-brand.
 export function getCategoryColor(category: string): string {
   const colors: Record<string, string> = {
-    onboarding: '#7c3aed',
-    sales: '#0891b2',
-    warehouse: '#b45309',
-    ucbzerowaste: '#15803d',
-    general: '#1e40af',
+    onboarding: '#281D73',
+    sales: '#E25820',
+    warehouse: '#714F36',
+    ucbzerowaste: '#609D3B',
+    general: '#281D73',
   }
-  return colors[category] ?? '#1e40af'
+  return colors[category] ?? '#281D73'
 }
 
 export function getCategoryLabel(category: string): string {
