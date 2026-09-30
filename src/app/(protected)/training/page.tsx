@@ -140,6 +140,20 @@ export default async function TrainingPage({
     .eq('user_id', effectiveUserId)
     .eq('sections.is_archived', false)
 
+  // Program badges — grouping is purely organizational, so a missing
+  // programs table (migration not yet applied) just means no badges.
+  const [{ data: programs }, { data: programModules }] = await Promise.all([
+    supabase.from('programs').select('id, name, color'),
+    supabase.from('program_modules').select('program_id, module_id'),
+  ])
+  const programById = new Map((programs ?? []).map(p => [p.id, p]))
+  const programsByModule = new Map<string, { id: string; name: string; color: string }[]>()
+  for (const pm of programModules ?? []) {
+    const p = programById.get(pm.program_id)
+    if (!p) continue
+    programsByModule.set(pm.module_id, [...(programsByModule.get(pm.module_id) ?? []), p])
+  }
+
   // A module's required set is null/absent (whole module or admin preview,
   // no restriction) or a specific Set of section ids (partial assignment).
   const isSectionRequired = (moduleId: string, sectionId: string) => {
@@ -176,6 +190,7 @@ export default async function TrainingPage({
       required: mod.auto_assign_all,
       assigned: assignedModuleIds.includes(mod.id),
       isChecklist: mod.module_type === 'checklist',
+      programs: programsByModule.get(mod.id) ?? [],
     }
   })
 

@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { LearningTabs, type LearningTab } from '@/components/learning/LearningTabs'
 import { JourneyBuilderContent } from '@/components/learning/JourneyBuilderContent'
 import { AssignmentRulesContent } from '@/components/learning/AssignmentRulesContent'
+import { ProgramsContent } from '@/components/learning/ProgramsContent'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,7 +24,7 @@ export default async function LearningManagementPage({
   if (profile?.role !== 'admin') redirect('/dashboard')
 
   const { tab } = await searchParams
-  const active: LearningTab = tab === 'rules' ? 'rules' : 'builder'
+  const active: LearningTab = tab === 'rules' ? 'rules' : tab === 'programs' ? 'programs' : 'builder'
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
@@ -32,6 +33,7 @@ export default async function LearningManagementPage({
         <LearningTabs active={active} />
         {active === 'builder' && <JourneyBuilderContent userId={user.id} />}
         {active === 'rules' && <AssignmentRulesContent userId={user.id} />}
+        {active === 'programs' && <ProgramsContent userId={user.id} />}
       </main>
     </div>
   )

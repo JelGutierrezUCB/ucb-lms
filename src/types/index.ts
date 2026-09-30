@@ -285,6 +285,25 @@ export interface LearningPathTarget {
   value: string
 }
 
+// A named grouping of courses for browsing/reporting (e.g. "Leadership
+// Development") — unlike a learning path, a program has no order and no
+// auto-enrollment; a course can belong to more than one program.
+export interface Program {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ProgramModule {
+  program_id: string
+  module_id: string
+  added_at: string
+}
+
 // Issued automatically when someone has earned the certificate for every
 // course in a journey they're enrolled in.
 export interface JourneyCertificate {

@@ -20,6 +20,7 @@ export interface CatalogItem {
   required: boolean
   assigned: boolean
   isChecklist: boolean
+  programs: { id: string; name: string; color: string }[]
 }
 
 type Scope = 'mine' | 'all'
@@ -51,6 +52,7 @@ export function CatalogGrid({ items, asParam, allowScopeToggle, t }: Props) {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
   const [status, setStatus] = useState<Status>('all')
+  const [program, setProgram] = useState('all')
 
   const scoped = useMemo(
     () => (allowScopeToggle && scope === 'mine' ? items.filter(i => i.assigned) : items),
@@ -58,12 +60,18 @@ export function CatalogGrid({ items, asParam, allowScopeToggle, t }: Props) {
   )
 
   const categories = useMemo(() => [...new Set(scoped.map(i => i.category))].sort(), [scoped])
+  const programs = useMemo(() => {
+    const byId = new Map<string, { id: string; name: string; color: string }>()
+    for (const i of scoped) for (const p of i.programs) byId.set(p.id, p)
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [scoped])
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     return scoped.filter(i => {
       if (category !== 'all' && i.category !== category) return false
       if (status !== 'all' && statusOf(i.percent) !== status) return false
+      if (program !== 'all' && !i.programs.some(p => p.id === program)) return false
       if (!q) return true
       return (
         i.title.toLowerCase().includes(q) ||
@@ -71,9 +79,9 @@ export function CatalogGrid({ items, asParam, allowScopeToggle, t }: Props) {
         getCategoryLabel(i.category).toLowerCase().includes(q)
       )
     })
-  }, [scoped, query, category, status])
+  }, [scoped, query, category, status, program])
 
-  const filtersActive = query.trim() !== '' || category !== 'all' || status !== 'all'
+  const filtersActive = query.trim() !== '' || category !== 'all' || status !== 'all' || program !== 'all'
 
   return (
     <div className="space-y-5">
@@ -128,6 +136,19 @@ export function CatalogGrid({ items, asParam, allowScopeToggle, t }: Props) {
               <option key={o.key} value={o.key}>{o.label}</option>
             ))}
           </select>
+          {programs.length > 0 && (
+            <select
+              value={program}
+              onChange={e => setProgram(e.target.value)}
+              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              aria-label={t.catalog.filterByProgram}
+            >
+              <option value="all">{t.catalog.anyProgram}</option>
+              {programs.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         <p className="text-sm text-slate-500">
@@ -135,7 +156,7 @@ export function CatalogGrid({ items, asParam, allowScopeToggle, t }: Props) {
           {filtersActive && (
             <button
               type="button"
-              onClick={() => { setQuery(''); setCategory('all'); setStatus('all') }}
+              onClick={() => { setQuery(''); setCategory('all'); setStatus('all'); setProgram('all') }}
               className="ml-2 text-blue-600 hover:underline"
             >
               {t.catalog.clearFilters}
@@ -187,6 +208,11 @@ export function CatalogGrid({ items, asParam, allowScopeToggle, t }: Props) {
                       {getCategoryLabel(item.category)}
                     </Badge>
                     {item.isChecklist && <Badge variant="outline">{t.catalog.checklist}</Badge>}
+                    {item.programs.map(p => (
+                      <Badge key={p.id} variant="outline" style={{ borderColor: p.color, color: p.color }}>
+                        {p.name}
+                      </Badge>
+                    ))}
                   </div>
                   {item.description && (
                     <p className="text-sm text-slate-500 line-clamp-2 mb-3">{item.description}</p>

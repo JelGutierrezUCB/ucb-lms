@@ -1,12 +1,13 @@
 import Link from 'next/link'
-import { Layers, ListChecks } from 'lucide-react'
+import { Layers, ListChecks, FolderKanban } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export type LearningTab = 'builder' | 'rules'
+export type LearningTab = 'builder' | 'rules' | 'programs'
 
 const TABS: { key: LearningTab; label: string; icon: React.ElementType }[] = [
   { key: 'builder', label: 'Journey Builder', icon: Layers },
   { key: 'rules', label: 'Assignment Rules', icon: ListChecks },
+  { key: 'programs', label: 'Programs', icon: FolderKanban },
 ]
 
 // Tab bar for the Learning Management section. Each tab is a link (?tab=...),
