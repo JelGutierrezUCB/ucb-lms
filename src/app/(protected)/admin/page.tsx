@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { ModuleCompletionList } from '@/components/admin/ModuleCompletionList'
 import { AdminActionButtons } from '@/components/admin/AdminActionButtons'
 import { formatDate } from '@/lib/utils'
+import { CertificatePreviewButton } from '@/components/certificates/CertificatePreviewButton'
 import type { Certificate } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -301,14 +302,17 @@ export default async function AdminDashboardPage() {
                           <p className="font-medium text-slate-900 text-sm truncate">{cert.module_title}</p>
                           <p className="text-xs text-slate-400">Issued {formatDate(cert.issued_at)}</p>
                         </div>
-                        <a
-                          href={`/api/certificate?certificateId=${cert.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-sm text-blue-600 hover:underline shrink-0"
-                        >
-                          <Download className="h-3.5 w-3.5" /> Download
-                        </a>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <CertificatePreviewButton href={`/api/certificate?certificateId=${cert.id}`} className="text-sm" />
+                          <a
+                            href={`/api/certificate?certificateId=${cert.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                          >
+                            <Download className="h-3.5 w-3.5" /> Download
+                          </a>
+                        </div>
                       </div>
                     ))}
                   </div>

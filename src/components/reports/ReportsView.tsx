@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import {
   Search, ChevronDown, ChevronUp, BarChart3, CheckCircle, Clock, AlertCircle, Download,
-  Check, X, Trash2, Award, ExternalLink, FileCheck, FileClock, Loader2,
+  Check, X, Trash2, ExternalLink, FileCheck, FileClock, Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +17,7 @@ import type { Profile, Module, DocumentContent } from '@/types'
 import { formatDate, getCategoryLabel } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { QuizAnswersDialog } from './QuizAnswersDialog'
+import { CertificatePreviewButton } from '@/components/certificates/CertificatePreviewButton'
 
 // Production facility codes — employees at these locations get the Production tab
 const PRODUCTION_CODES = ['HA', 'ML', 'HV', 'MLC', 'HVP']
@@ -827,14 +828,10 @@ export function ReportsView({ employees, modules, assignments: rawAssignments, s
                                           </td>
                                           <td className="px-3 py-2.5 text-center">
                                             {hasCertificate ? (
-                                              <a
+                                              <CertificatePreviewButton
                                                 href={`/api/certificate?userId=${emp.id}&moduleId=${a.module_id}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1 text-blue-600 hover:underline"
-                                              >
-                                                <Award className="h-3.5 w-3.5" /> View
-                                              </a>
+                                                className="justify-center"
+                                              />
                                             ) : <span className="text-slate-300">—</span>}
                                           </td>
                                           <td className="px-3 py-2.5 text-center text-slate-500">

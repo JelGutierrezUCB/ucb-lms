@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { cn, formatDate, getCategoryLabel } from '@/lib/utils'
+import { CertificatePreviewButton } from '@/components/certificates/CertificatePreviewButton'
 
 export interface PersonStatus {
   userId: string
@@ -204,15 +205,13 @@ export function CourseCompletionsView({ courses, scopeLabel }: { courses: Course
                                         </p>
                                       </div>
                                       {p.certificateId && (
-                                        <a
-                                          href={`/api/certificate?certificateId=${p.certificateId}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          onClick={e => e.stopPropagation()}
-                                          className="inline-flex shrink-0 items-center gap-1 text-xs text-blue-600 hover:underline"
-                                        >
-                                          <Award className="h-3.5 w-3.5" /> Certificate
-                                        </a>
+                                        <span onClick={e => e.stopPropagation()} className="shrink-0">
+                                          <CertificatePreviewButton
+                                            href={`/api/certificate?certificateId=${p.certificateId}`}
+                                            label="Certificate"
+                                            className="text-xs"
+                                          />
+                                        </span>
                                       )}
                                     </li>
                                   ))}

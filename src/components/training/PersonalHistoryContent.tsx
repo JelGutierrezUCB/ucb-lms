@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Award, CheckCircle, Download, History, TrendingUp } from 'lucide-react'
 import { formatDate, getCategoryLabel } from '@/lib/utils'
+import { CertificatePreviewButton } from '@/components/certificates/CertificatePreviewButton'
 import type { Assignment, Certificate, Module } from '@/types'
 
 
@@ -167,14 +168,17 @@ export async function PersonalHistoryContent({ userId }: { userId: string }) {
                         </td>
                         <td className="px-4 py-3 text-center">
                           {cert ? (
-                            <a
-                              href={`/api/certificate?certificateId=${cert.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-blue-600 hover:underline"
-                            >
-                              <Download className="h-3.5 w-3.5" /> Download
-                            </a>
+                            <div className="inline-flex items-center gap-3">
+                              <CertificatePreviewButton href={`/api/certificate?certificateId=${cert.id}`} />
+                              <a
+                                href={`/api/certificate?certificateId=${cert.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                              >
+                                <Download className="h-3.5 w-3.5" /> Download
+                              </a>
+                            </div>
                           ) : (
                             <span className="text-slate-300">—</span>
                           )}

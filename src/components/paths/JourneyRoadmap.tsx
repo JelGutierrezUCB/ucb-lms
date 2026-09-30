@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { ProgressRing } from '@/components/ui/progress-ring'
 import { cn, formatDate, getCategoryLabel } from '@/lib/utils'
+import { CertificatePreviewButton } from '@/components/certificates/CertificatePreviewButton'
 import type { PathStep, UserPath } from '@/lib/learning-paths'
 
 // Colors for phases (the signposts on the road), cycled in order.
@@ -108,14 +109,17 @@ export function JourneyRoadmap({ journey }: { journey: UserPath }) {
             {nextStep.percent > 0 ? 'Continue' : 'Start'} <ArrowRight className="h-4 w-4" />
           </Link>
         ) : certificate ? (
-          <a
-            href={`/api/certificate?journeyCertificateId=${certificate.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden sm:inline-flex shrink-0 items-center gap-2 rounded-lg bg-green-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-800"
-          >
-            <Download className="h-4 w-4" /> Certificate
-          </a>
+          <div className="hidden sm:flex shrink-0 items-center gap-3">
+            <CertificatePreviewButton href={`/api/certificate?journeyCertificateId=${certificate.id}`} className="text-sm" />
+            <a
+              href={`/api/certificate?journeyCertificateId=${certificate.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg bg-green-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-800"
+            >
+              <Download className="h-4 w-4" /> Certificate
+            </a>
+          </div>
         ) : null}
       </div>
 
@@ -211,14 +215,17 @@ export function JourneyRoadmap({ journey }: { journey: UserPath }) {
                   {certificate ? (
                     <>
                       <p className="mt-0.5 text-xs text-slate-500">Earned {formatDate(certificate.issuedAt)}. Well done!</p>
-                      <a
-                        href={`/api/certificate?journeyCertificateId=${certificate.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-800"
-                      >
-                        <Download className="h-3.5 w-3.5" /> Download certificate
-                      </a>
+                      <div className="mt-2 flex items-center gap-3">
+                        <a
+                          href={`/api/certificate?journeyCertificateId=${certificate.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-800"
+                        >
+                          <Download className="h-3.5 w-3.5" /> Download certificate
+                        </a>
+                        <CertificatePreviewButton href={`/api/certificate?journeyCertificateId=${certificate.id}`} className="text-xs" />
+                      </div>
                     </>
                   ) : complete ? (
                     <p className="mt-0.5 text-xs text-slate-500">All courses done — your certificate is being prepared. Refresh in a moment.</p>

@@ -15,6 +15,7 @@ import { JourneyDots } from '@/components/paths/JourneyDots'
 import { ProgressRing } from '@/components/ui/progress-ring'
 import { isProtectedModule } from '@/lib/protected-modules'
 import { AssignedTrainings, type DashboardTraining } from '@/components/dashboard/AssignedTrainings'
+import { CertificatePreviewButton } from '@/components/certificates/CertificatePreviewButton'
 import type { Profile, Module, Assignment, Certificate, JourneyCertificate } from '@/types'
 
 export default async function DashboardPage() {
@@ -502,14 +503,22 @@ export default async function DashboardPage() {
                         {t.dashboard.issued} {formatDate(jc.issued_at)} · {fmt(t.dashboard.allCoursesCompleted, { count: jc.courses_count })}
                       </p>
                     </div>
-                    <a
-                      href={`/api/certificate?journeyCertificateId=${jc.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline shrink-0"
-                    >
-                      <Download className="h-3.5 w-3.5" /> {t.common.download}
-                    </a>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <CertificatePreviewButton
+                        href={`/api/certificate?journeyCertificateId=${jc.id}`}
+                        label={t.common.preview}
+                        downloadLabel={t.common.download}
+                        className="text-sm"
+                      />
+                      <a
+                        href={`/api/certificate?journeyCertificateId=${jc.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+                      >
+                        <Download className="h-3.5 w-3.5" /> {t.common.download}
+                      </a>
+                    </div>
                   </div>
                 ))}
                 {(myCertificates ?? []).map(cert => (
@@ -524,14 +533,22 @@ export default async function DashboardPage() {
                         {cert.max_score ? ` · ${t.history.score}: ${cert.score}/${cert.max_score}` : ''}
                       </p>
                     </div>
-                    <a
-                      href={`/api/certificate?certificateId=${cert.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline shrink-0"
-                    >
-                      <Download className="h-3.5 w-3.5" /> {t.common.download}
-                    </a>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <CertificatePreviewButton
+                        href={`/api/certificate?certificateId=${cert.id}`}
+                        label={t.common.preview}
+                        downloadLabel={t.common.download}
+                        className="text-sm"
+                      />
+                      <a
+                        href={`/api/certificate?certificateId=${cert.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+                      >
+                        <Download className="h-3.5 w-3.5" /> {t.common.download}
+                      </a>
+                    </div>
                   </div>
                 ))}
               </div>
