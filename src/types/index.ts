@@ -123,21 +123,32 @@ export interface VideoContent {
   duration_seconds?: number // captured from the file's own metadata on upload; not available for YouTube links
 }
 
-export type QuestionType = 'multiple_choice' | 'long_answer'
+export type QuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'long_answer'
 
 export interface QuizQuestion {
   id: string
   type?: QuestionType // defaults to 'multiple_choice' when absent, for backward compatibility
   question: string
-  // multiple_choice only:
+  // Optional image shown above the question (e.g. "identify the hazard").
+  image_url?: string | null
+  // multiple_choice / true_false: options + single correct_index.
+  // true_false always has options ['True', 'False'].
   options: string[]
   correct_index: number
+  // multiple_answer only: every one of these indexes must be selected, and
+  // nothing else, to earn credit. correct_index is unused for this type.
+  correct_indexes?: number[]
   explanation?: string
 }
 
 export interface QuizContent {
   questions: QuizQuestion[]
   passing_score: number
+  // Question-bank behavior: when set and smaller than questions.length, each
+  // attempt draws this many questions at random from the full list.
+  draw_count?: number | null
+  // Shuffle question order (after any draw_count subsetting) on every attempt.
+  randomize_order?: boolean
 }
 
 export type BlockContent = TextContent | VideoContent | QuizContent | SlidesContent | DocumentContent
