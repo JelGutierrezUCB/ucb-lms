@@ -34,6 +34,9 @@ export interface Module {
   category: string
   thumbnail_color: string
   is_published: boolean
+  // Retired from active use — hidden from the catalog, assignment rules, and
+  // journey builder, but its content/history/certificates stay intact.
+  is_archived: boolean
   created_by: string | null
   estimated_minutes: number
   auto_assign_all: boolean

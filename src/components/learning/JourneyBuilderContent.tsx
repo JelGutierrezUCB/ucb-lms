@@ -22,7 +22,7 @@ export async function JourneyBuilderContent({ userId }: { userId: string }) {
     supabase.from('learning_path_items').select('path_id, module_id, order_index, phase, note').order('order_index'),
     supabase.from('learning_path_targets').select('path_id, kind, value'),
     supabase.from('learning_path_enrollments').select('path_id'),
-    supabase.from('modules').select('id, title, category, estimated_minutes').order('title'),
+    supabase.from('modules').select('id, title, category, estimated_minutes').eq('is_archived', false).order('title'),
     supabase.from('profiles').select('id, full_name, department, company, role, manager_id, job_role_id, is_active').order('full_name'),
   ])
 

@@ -21,7 +21,7 @@ export async function AssignmentRulesContent({ userId }: { userId: string }) {
   ] = await Promise.all([
     supabase.from('course_rules').select('*').order('created_at', { ascending: false }),
     supabase.from('course_rule_targets').select('rule_id, kind, value'),
-    supabase.from('modules').select('id, title, category, estimated_minutes, is_published').order('title'),
+    supabase.from('modules').select('id, title, category, estimated_minutes, is_published').eq('is_archived', false).order('title'),
     supabase.from('job_roles').select('*').order('name'),
     supabase.from('profiles').select('id, full_name, department, company, role, manager_id, job_role_id, is_active').order('full_name'),
     supabase.from('assignments').select('source_rule_id').not('source_rule_id', 'is', null),
