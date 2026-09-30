@@ -18,6 +18,8 @@ import {
   Award,
   ClipboardCheck,
   Settings2,
+  Target,
+  Gauge,
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -48,6 +50,7 @@ const learnerItems: NavItem[] = [
   { href: '/paths', label: 'Learning Journeys', labelKey: 'learningJourneys', icon: <Route className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
   { href: '/training-history', label: 'My History', labelKey: 'myHistory', icon: <History className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
   { href: '/my-certificates', label: 'My Certificates', labelKey: 'myCertificates', icon: <Award className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
+  { href: '/my-skills', label: 'My Skills', labelKey: 'mySkills', icon: <Target className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
 ]
 
 // Admin / manager view: managing people, courses, journeys and reporting.
@@ -59,6 +62,8 @@ const adminItems: NavItem[] = [
   { href: '/admin/modules', label: 'Training Modules', icon: <FolderOpen className="h-5 w-5" />, roles: ['admin'] },
   // Journey Builder and Assignment Rules, as tabs of one section
   { href: '/admin/learning', label: 'Learning Management', icon: <Layers className="h-5 w-5" />, roles: ['admin'] },
+  { href: '/admin/skills', label: 'Skills', icon: <Target className="h-5 w-5" />, roles: ['admin'] },
+  { href: '/employee-skills', label: 'Team Skills', icon: <Gauge className="h-5 w-5" />, roles: ['admin', 'manager'] },
   { href: '/training-generator', label: 'AI Generator', icon: <Sparkles className="h-5 w-5" />, roles: ['admin'] },
   { href: '/reports', label: 'Reports', icon: <BarChart3 className="h-5 w-5" />, roles: ['admin', 'manager'] },
   { href: '/certificates', label: 'Certificates', icon: <Award className="h-5 w-5" />, roles: ['admin', 'manager'] },

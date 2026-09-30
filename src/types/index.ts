@@ -245,6 +245,54 @@ export interface JobRole {
   created_at: string
 }
 
+// Skills & competency system: Employee -> Job Role -> Skills -> Training ->
+// Assessment -> Learning Path.
+export const SKILL_PROFICIENCY_LEVELS = [
+  { value: 1, label: 'Novice' },
+  { value: 2, label: 'Beginner' },
+  { value: 3, label: 'Competent' },
+  { value: 4, label: 'Proficient' },
+  { value: 5, label: 'Expert' },
+] as const
+
+export interface Skill {
+  id: string
+  name: string
+  category: string | null
+  description: string | null
+  created_by: string | null
+  created_at: string
+}
+
+// Required proficiency level for a skill within a job role.
+export interface JobRoleSkill {
+  job_role_id: string
+  skill_id: string
+  required_level: number
+}
+
+// A skill a training module builds — used to recommend training for a gap.
+export interface ModuleSkill {
+  module_id: string
+  skill_id: string
+}
+
+export type SkillAssessmentSource = 'self' | 'supervisor'
+
+// One point-in-time proficiency assessment. The *current* level for a
+// person+skill is their most recent row — an append-only history doubles as
+// the "tracked over time" record with no separate table needed.
+export interface EmployeeSkillAssessment {
+  id: string
+  user_id: string
+  skill_id: string
+  proficiency_level: number
+  source: SkillAssessmentSource
+  assessed_by: string | null
+  assessed_at: string
+  notes: string | null
+}
+
 export type LearningPathKind = 'learning' | 'onboarding'
 
 export interface LearningPath {

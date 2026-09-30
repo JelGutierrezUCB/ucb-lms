@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
 @theme {
-  /* Brand palette — the only four colors the app's branding may use.
-     Overriding Tailwind's built-in blue/green scales means every existing
-     bg-blue-*/text-blue-*/bg-green-* etc. utility picks these up automatically,
-     anchored exactly on the brand hex at the *-600 step. Status colors (red,
-     amber, etc.) are deliberately left as Tailwind's defaults — they carry
-     meaning (overdue, warning), not brand identity. */
+  /* Brand palette: the only four colors the app branding may use.
+     Overriding the built-in blue/green scales means every existing
+     bg-blue-*, text-blue-*, bg-green-* etc utility picks these up
+     automatically, anchored exactly on the brand hex at the 600 step.
+     Status colors (red, amber, etc) are left as the defaults on purpose,
+     since they carry meaning (overdue, warning), not brand identity. */
   --color-brand-navy: #281d73;
   --color-brand-green: #609d3b;
   --color-brand-brown: #714f36;
