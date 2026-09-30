@@ -47,6 +47,7 @@ const learnerItems: NavItem[] = [
   { href: '/training', label: 'My Training', labelKey: 'myTraining', icon: <BookOpen className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
   { href: '/paths', label: 'Learning Journeys', labelKey: 'learningJourneys', icon: <Route className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
   { href: '/training-history', label: 'My History', labelKey: 'myHistory', icon: <History className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
+  { href: '/my-certificates', label: 'My Certificates', labelKey: 'myCertificates', icon: <Award className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
 ]
 
 // Admin / manager view: managing people, courses, journeys and reporting.

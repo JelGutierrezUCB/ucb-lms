@@ -41,6 +41,7 @@ const en = {
     myTraining: 'My Training',
     learningJourneys: 'Learning Journeys',
     myHistory: 'My History',
+    myCertificates: 'My Certificates',
     viewingAs: 'Viewing as',
   },
   header: {
@@ -181,6 +182,15 @@ const en = {
     score: 'Score',
     certificate: 'Certificate',
   },
+  certificatesPage: {
+    title: 'My Certificates',
+    subtitle: 'Every certificate you\'ve earned, ready to preview or download.',
+    noCertificatesYet: 'No certificates yet',
+    noCertificatesBody: 'Complete a training or a full learning journey to earn one automatically.',
+    issued: 'Issued',
+    journey: 'Journey',
+    allCoursesCompleted: 'all {count} courses completed',
+  },
   scoreSummary: {
     title: 'My Score Summary',
     noAttemptsYet: 'No quiz attempts yet',
@@ -244,6 +254,7 @@ const es = {
     myTraining: 'Mi Capacitación',
     learningJourneys: 'Rutas de Aprendizaje',
     myHistory: 'Mi Historial',
+    myCertificates: 'Mis Certificados',
     viewingAs: 'Viendo como',
   },
   header: {
@@ -383,6 +394,15 @@ const es = {
     progress: 'Progreso',
     score: 'Puntuación',
     certificate: 'Certificado',
+  },
+  certificatesPage: {
+    title: 'Mis Certificados',
+    subtitle: 'Todos los certificados que has obtenido, listos para previsualizar o descargar.',
+    noCertificatesYet: 'Aún no hay certificados',
+    noCertificatesBody: 'Completa una capacitación o una ruta de aprendizaje completa para obtener uno automáticamente.',
+    issued: 'Emitido',
+    journey: 'Ruta',
+    allCoursesCompleted: 'los {count} cursos completados',
   },
   scoreSummary: {
     title: 'Mi Resumen de Puntuación',
