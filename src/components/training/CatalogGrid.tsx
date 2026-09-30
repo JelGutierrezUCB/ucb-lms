@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { cn, getCategoryColor, getCategoryLabel } from '@/lib/utils'
+import type { Dict } from '@/lib/i18n/dictionaries'
 
 export interface CatalogItem {
   id: string
@@ -24,13 +25,6 @@ export interface CatalogItem {
 type Scope = 'mine' | 'all'
 type Status = 'all' | 'not_started' | 'in_progress' | 'completed'
 
-const STATUS_OPTIONS: { key: Status; label: string }[] = [
-  { key: 'all', label: 'Any status' },
-  { key: 'not_started', label: 'Not started' },
-  { key: 'in_progress', label: 'In progress' },
-  { key: 'completed', label: 'Completed' },
-]
-
 function statusOf(percent: number): Exclude<Status, 'all'> {
   return percent === 100 ? 'completed' : percent > 0 ? 'in_progress' : 'not_started'
 }
@@ -42,9 +36,16 @@ interface Props {
   // Employees can flip between their assigned trainings and every published
   // course; managers/admins and proxy views always see the list they were given.
   allowScopeToggle: boolean
+  t: Dict
 }
 
-export function CatalogGrid({ items, asParam, allowScopeToggle }: Props) {
+export function CatalogGrid({ items, asParam, allowScopeToggle, t }: Props) {
+  const STATUS_OPTIONS: { key: Status; label: string }[] = [
+    { key: 'all', label: t.catalog.anyStatus },
+    { key: 'not_started', label: t.catalog.statusNotStarted },
+    { key: 'in_progress', label: t.catalog.statusInProgress },
+    { key: 'completed', label: t.catalog.statusCompleted },
+  ]
   const assignedCount = items.filter(i => i.assigned).length
   const [scope, setScope] = useState<Scope>(allowScopeToggle && assignedCount > 0 ? 'mine' : 'all')
   const [query, setQuery] = useState('')
@@ -79,7 +80,7 @@ export function CatalogGrid({ items, asParam, allowScopeToggle }: Props) {
       <div className="space-y-3">
         {allowScopeToggle && (
           <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm">
-            {([['mine', `My trainings (${assignedCount})`], ['all', `All courses (${items.length})`]] as const).map(([key, label]) => (
+            {([['mine', `${t.catalog.myTrainings} (${assignedCount})`], ['all', `${t.catalog.allCourses} (${items.length})`]] as const).map(([key, label]) => (
               <button
                 key={key}
                 type="button"
@@ -101,18 +102,18 @@ export function CatalogGrid({ items, asParam, allowScopeToggle }: Props) {
             <Input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Search courses by title, topic, or keyword"
+              placeholder={t.catalog.searchPlaceholder}
               className="pl-9"
-              aria-label="Search courses"
+              aria-label={t.catalog.searchAriaLabel}
             />
           </div>
           <select
             value={category}
             onChange={e => setCategory(e.target.value)}
             className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="Filter by category"
+            aria-label={t.catalog.filterByCategory}
           >
-            <option value="all">All categories</option>
+            <option value="all">{t.catalog.allCategories}</option>
             {categories.map(c => (
               <option key={c} value={c}>{getCategoryLabel(c)}</option>
             ))}
@@ -121,7 +122,7 @@ export function CatalogGrid({ items, asParam, allowScopeToggle }: Props) {
             value={status}
             onChange={e => setStatus(e.target.value as Status)}
             className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="Filter by status"
+            aria-label={t.catalog.filterByStatus}
           >
             {STATUS_OPTIONS.map(o => (
               <option key={o.key} value={o.key}>{o.label}</option>
@@ -130,14 +131,14 @@ export function CatalogGrid({ items, asParam, allowScopeToggle }: Props) {
         </div>
 
         <p className="text-sm text-slate-500">
-          {visible.length} of {scoped.length} {scoped.length === 1 ? 'course' : 'courses'}
+          {visible.length} {t.catalog.of} {scoped.length} {scoped.length === 1 ? t.catalog.course : t.catalog.courses}
           {filtersActive && (
             <button
               type="button"
               onClick={() => { setQuery(''); setCategory('all'); setStatus('all') }}
               className="ml-2 text-blue-600 hover:underline"
             >
-              Clear filters
+              {t.catalog.clearFilters}
             </button>
           )}
         </p>
@@ -146,8 +147,8 @@ export function CatalogGrid({ items, asParam, allowScopeToggle }: Props) {
       {visible.length === 0 ? (
         <div className="text-center py-16">
           <SearchX className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500 font-medium">No courses match your search</p>
-          <p className="text-slate-400 text-sm mt-1">Try a different keyword or clear the filters.</p>
+          <p className="text-slate-500 font-medium">{t.catalog.noMatches}</p>
+          <p className="text-slate-400 text-sm mt-1">{t.catalog.noMatchesBody}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -168,7 +169,7 @@ export function CatalogGrid({ items, asParam, allowScopeToggle }: Props) {
                   </span>
                   {item.required && (
                     <div className="absolute top-2 right-2 flex items-center gap-1 rounded-full bg-amber-400 text-amber-950 text-xs font-semibold px-2.5 py-1">
-                      <Star className="h-3 w-3 fill-current" /> Required
+                      <Star className="h-3 w-3 fill-current" /> {t.common.required}
                     </div>
                   )}
                 </div>
@@ -177,7 +178,7 @@ export function CatalogGrid({ items, asParam, allowScopeToggle }: Props) {
                     <p className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors flex-1">
                       {item.title}
                     </p>
-                    {item.assigned && <Badge variant="default">Assigned</Badge>}
+                    {item.assigned && <Badge variant="default">{t.catalog.assigned}</Badge>}
                   </div>
                   <div className="flex items-center gap-1.5 mb-3">
                     <Badge
@@ -185,7 +186,7 @@ export function CatalogGrid({ items, asParam, allowScopeToggle }: Props) {
                     >
                       {getCategoryLabel(item.category)}
                     </Badge>
-                    {item.isChecklist && <Badge variant="outline">Checklist</Badge>}
+                    {item.isChecklist && <Badge variant="outline">{t.catalog.checklist}</Badge>}
                   </div>
                   {item.description && (
                     <p className="text-sm text-slate-500 line-clamp-2 mb-3">{item.description}</p>
@@ -195,7 +196,7 @@ export function CatalogGrid({ items, asParam, allowScopeToggle }: Props) {
                       <span className="flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5" />{item.minutes} min
                       </span>
-                      <span>{item.percent}% complete</span>
+                      <span>{item.percent}% {t.catalog.percentComplete}</span>
                     </div>
                     <Progress
                       value={item.percent}

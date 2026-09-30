@@ -18,6 +18,8 @@ import { cn, getCategoryColor, getCategoryLabel } from '@/lib/utils'
 import { isProtectedModule } from '@/lib/protected-modules'
 import type { Module, ContentBlock, QuizContent, DocumentContent } from '@/types'
 import { useProxy } from '@/contexts/ProxyContext'
+import { useLocale } from '@/contexts/LocaleContext'
+import { fmt } from '@/lib/i18n/dictionaries'
 
 interface SectionWithBlocks {
   id: string
@@ -62,6 +64,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
   // "all complete" state instead of the completion screen winning every time.
   const [reviewMode, setReviewMode] = useState(false)
   const { effectiveUserId } = useProxy()
+  const { t } = useLocale()
   const supabase = createClient()
   const router = useRouter()
 
@@ -103,8 +106,8 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
     if (!canComplete) {
       toast.error(
         !uploadsOk
-          ? 'Please upload your signed document(s) before completing this section'
-          : 'Please pass the quiz before completing this section'
+          ? t.player.uploadBeforeComplete
+          : t.player.passQuizBeforeComplete
       )
       return
     }
@@ -113,13 +116,13 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
       .from('section_progress')
       .upsert({ user_id: activeUserId, section_id: currentSection.id }, { onConflict: 'user_id,section_id' })
 
-    if (error) { toast.error('Failed to save progress'); setSaving(false); return }
+    if (error) { toast.error(t.player.saveFailed); setSaving(false); return }
 
     setCompletedSections(prev => new Set([...prev, currentSection.id]))
     setSaving(false)
 
     if (isLastSection) {
-      toast.success(module.module_type === 'checklist' ? 'Checklist complete! Great job!' : 'Training complete! Great job!')
+      toast.success(module.module_type === 'checklist' ? t.player.checklistCompleteToast : t.player.trainingCompleteToast)
       fetch('/api/notifications/completion', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -149,8 +152,8 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
       <div className="flex items-center justify-center h-full p-12 text-center">
         <div>
           <BookOpen className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500 font-medium">No content yet</p>
-          <p className="text-slate-400 text-sm">This module has no sections yet.</p>
+          <p className="text-slate-500 font-medium">{t.player.noContentYet}</p>
+          <p className="text-slate-400 text-sm">{t.player.noContentBody}</p>
         </div>
       </div>
     )
@@ -167,7 +170,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
             onClick={() => setSummaryOpen(o => !o)}
             className="w-full flex items-center justify-between px-6 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            <span>Course Summary</span>
+            <span>{t.player.courseSummary}</span>
             {summaryOpen ? (
               <ChevronUp className="h-4 w-4 text-slate-400" />
             ) : (
@@ -180,7 +183,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
               {module.estimated_minutes > 0 && (
                 <div className="flex items-center gap-1.5 text-xs text-slate-400">
                   <Clock className="h-3.5 w-3.5" />
-                  <span>{module.estimated_minutes} min estimated</span>
+                  <span>{module.estimated_minutes} {t.player.estimatedMinutes}</span>
                 </div>
               )}
             </div>
@@ -206,7 +209,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
             </div>
             <div className="space-y-1">
               <div className="flex justify-between text-xs text-slate-500">
-                <span>{completedCount} of {totalSections} sections</span>
+                <span>{fmt(t.player.sectionsOf, { done: completedCount, total: totalSections })}</span>
                 <span>{progressPercent}%</span>
               </div>
               <Progress
@@ -220,7 +223,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
               className="md:hidden mt-3 w-full flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700"
               aria-expanded={listOpen}
             >
-              <span>Sections ({currentSectionIndex + 1} of {totalSections})</span>
+              <span>{fmt(t.player.sectionsToggle, { current: currentSectionIndex + 1, total: totalSections })}</span>
               {listOpen ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
             </button>
           </div>
@@ -239,7 +242,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
                     setListOpen(false)
                     if (isAllComplete) setReviewMode(true)
                   } else {
-                    toast.error('Complete the current training (and pass its quiz, if any) to unlock this one.')
+                    toast.error(t.player.unlockPrevious)
                   }
                 }}
                 className={cn(
@@ -270,19 +273,22 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
               <Trophy className="h-10 w-10 text-green-600" />
             </div>
             <h2 className="text-2xl font-bold text-slate-900 mb-2">
-              {module.module_type === 'checklist' ? 'Checklist Complete!' : 'Training Complete!'}
+              {module.module_type === 'checklist' ? t.player.checklistComplete : t.player.trainingComplete}
             </h2>
             <p className="text-slate-500 mb-6">
-              You've completed all {totalSections} sections of <strong>{module.title}</strong>. Congratulations!
+              {(() => {
+                const [before, after] = t.player.allSectionsCompleted.split('{title}')
+                return <>{fmt(before, { count: totalSections })}<strong>{module.title}</strong>{fmt(after, { count: totalSections })}</>
+              })()}
             </p>
             <div className="flex flex-wrap justify-center gap-3 mb-8">
               <a href={`/api/certificate?userId=${activeUserId}&moduleId=${module.id}`} target="_blank" rel="noopener noreferrer">
                 <Button className="gap-1.5 bg-green-700 hover:bg-green-800">
-                  <Award className="h-4 w-4" /> Download Certificate
+                  <Award className="h-4 w-4" /> {t.player.downloadCertificate}
                 </Button>
               </a>
-              <Button variant="outline" onClick={() => { setCurrentSectionIndex(0); setReviewMode(true) }}>Review from Start</Button>
-              <Button variant="outline" onClick={() => router.push('/training')}>Back to Catalog</Button>
+              <Button variant="outline" onClick={() => { setCurrentSectionIndex(0); setReviewMode(true) }}>{t.player.reviewFromStart}</Button>
+              <Button variant="outline" onClick={() => router.push('/training')}>{t.player.backToCatalog}</Button>
             </div>
 
             {/* Shown immediately so the certificate doesn't depend on the
@@ -292,7 +298,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
               <iframe
                 src={`/api/certificate?userId=${activeUserId}&moduleId=${module.id}#toolbar=0&navpanes=0&view=FitH`}
                 className="w-full h-full"
-                title="Your certificate of completion"
+                title={t.player.certificateAlt}
               />
             </div>
           </div>
@@ -300,17 +306,17 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
           <div className="max-w-3xl mx-auto p-4 md:p-8 space-y-6">
             {resumeIndex > 0 && currentSectionIndex === resumeIndex && !completedSections.has(currentSection.id) && (
               <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-800">
-                Welcome back — picking up where you left off.
+                {t.player.welcomeBackNote}
               </div>
             )}
             {/* Section header */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2 text-sm text-slate-400">
-                  <span>Section {currentSectionIndex + 1} of {totalSections}</span>
+                  <span>{fmt(t.player.sectionOf, { current: currentSectionIndex + 1, total: totalSections })}</span>
                   {completedSections.has(currentSection.id) && (
                     <Badge variant="success" className="flex items-center gap-1">
-                      <CheckCircle className="h-3 w-3" /> Completed
+                      <CheckCircle className="h-3 w-3" /> {t.player.completedBadge}
                     </Badge>
                   )}
                 </div>
@@ -319,7 +325,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
                     onClick={() => setReviewMode(false)}
                     className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
                   >
-                    <Trophy className="h-3.5 w-3.5" /> Back to certificate
+                    <Trophy className="h-3.5 w-3.5" /> {t.player.backToCertificate}
                   </button>
                 )}
               </div>
@@ -335,7 +341,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
                 return (
                   <div key={block.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex items-center gap-2 text-sm text-slate-500">
                     <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
-                    Quiz already completed — hidden here so you can use this training as reference only.
+                    {t.player.quizAlreadyCompleted}
                   </div>
                 )
               }
@@ -376,7 +382,7 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
             {/* Navigation */}
             <div className="flex items-center justify-between gap-3 pt-6 border-t border-slate-200">
               <Button variant="outline" onClick={goPrev} disabled={currentSectionIndex === 0}>
-                <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+                <ChevronLeft className="h-4 w-4 mr-1" /> {t.player.previous}
               </Button>
 
               <Button
@@ -390,10 +396,10 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
                 className={completedSections.has(currentSection.id) ? 'bg-green-600 hover:bg-green-700' : ''}
               >
                 {isAllComplete && reviewMode && isLastSection
-                  ? 'Back to Certificate'
+                  ? t.player.backToCertificate
                   : completedSections.has(currentSection.id)
-                  ? isLastSection ? 'Completed ✓' : 'Next Section'
-                  : isLastSection ? (module.module_type === 'checklist' ? 'Complete Checklist' : 'Complete Training') : 'Mark Complete & Continue'
+                  ? isLastSection ? t.player.completedCheck : t.player.nextSection
+                  : isLastSection ? (module.module_type === 'checklist' ? t.player.completeChecklist : t.player.completeTraining) : t.player.markCompleteContinue
                 }
                 {!completedSections.has(currentSection.id) && <ChevronRight className="h-4 w-4 ml-1" />}
               </Button>
@@ -401,13 +407,13 @@ export function TrainingPlayer({ module, sections, userId }: Props) {
 
             {!uploadsOk && !completedSections.has(currentSection.id) && (
               <p className="text-sm text-amber-600 text-center">
-                Upload your signed document(s) above to unlock this section
+                {t.player.uploadToUnlock}
               </p>
             )}
 
             {hasQuiz && !quizPassed.has(quizBlockId ?? '') && !completedSections.has(currentSection.id) && (
               <p className="text-sm text-amber-600 text-center">
-                Complete the quiz above to unlock this section
+                {t.player.quizToUnlock}
               </p>
             )}
           </div>

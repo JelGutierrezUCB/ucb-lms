@@ -25,10 +25,14 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useMobileNav } from '@/contexts/MobileNavContext'
 import { useView } from '@/contexts/ViewContext'
 import { useProxy } from '@/contexts/ProxyContext'
+import { useLocale } from '@/contexts/LocaleContext'
+import type { Dict } from '@/lib/i18n/dictionaries'
 
 interface NavItem {
   href: string
   label: string
+  // Learner items are translated; set instead of (and takes priority over) `label`.
+  labelKey?: keyof Dict['nav']
   icon: React.ReactNode
   // Which account types see this item (learner items are for everyone)
   roles: string[]
@@ -37,12 +41,12 @@ interface NavItem {
 }
 
 // Learner view: everything a person needs to do their own training. Same for
-// every account type.
+// every account type. Translated (English/Spanish) via labelKey.
 const learnerItems: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'], exact: true },
-  { href: '/training', label: 'My Training', icon: <BookOpen className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
-  { href: '/paths', label: 'Learning Journeys', icon: <Route className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
-  { href: '/training-history', label: 'My History', icon: <History className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
+  { href: '/dashboard', label: 'Dashboard', labelKey: 'dashboard', icon: <LayoutDashboard className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'], exact: true },
+  { href: '/training', label: 'My Training', labelKey: 'myTraining', icon: <BookOpen className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
+  { href: '/paths', label: 'Learning Journeys', labelKey: 'learningJourneys', icon: <Route className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
+  { href: '/training-history', label: 'My History', labelKey: 'myHistory', icon: <History className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
 ]
 
 // Admin / manager view: managing people, courses, journeys and reporting.
@@ -65,6 +69,7 @@ function SidebarBody() {
   const { profile } = useAuth()
   const { view, canSwitch, setView } = useView()
   const { proxyUser } = useProxy()
+  const { t } = useLocale()
 
   if (!profile) return null
 
@@ -95,7 +100,7 @@ function SidebarBody() {
       {/* Viewing someone else's portal — shown instead of the view switcher */}
       {proxyUser && (
         <div className="mx-3 mt-3 rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2">
-          <p className="text-xs font-semibold text-amber-400">Viewing as</p>
+          <p className="text-xs font-semibold text-amber-400">{t.nav.viewingAs}</p>
           <p className="text-sm text-white truncate">{proxyUser.full_name}</p>
         </div>
       )}
@@ -138,7 +143,7 @@ function SidebarBody() {
             )}
           >
             {item.icon}
-            {item.label}
+            {item.labelKey ? t.nav[item.labelKey] : item.label}
           </Link>
         ))}
       </nav>

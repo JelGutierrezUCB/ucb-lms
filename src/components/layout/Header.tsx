@@ -6,6 +6,8 @@ import { LogOut, ChevronDown, UserCog, Menu } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProxy } from '@/contexts/ProxyContext'
 import { useMobileNav } from '@/contexts/MobileNavContext'
+import { useLocale } from '@/contexts/LocaleContext'
+import { LanguageSwitcher } from './LanguageSwitcher'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +25,7 @@ export function Header({ title }: { title?: string }) {
   const { proxyUser, endProxy } = useProxy()
   const router = useRouter()
   const { setOpen: setMobileNavOpen } = useMobileNav()
+  const { t } = useLocale()
 
   const handleSignOut = async () => {
     await signOut()
@@ -56,15 +59,17 @@ export function Header({ title }: { title?: string }) {
         {proxyUser && (
           <div className="flex items-center gap-2 rounded-full bg-amber-50 border border-amber-200 px-3 py-1.5 text-sm">
             <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-            <span className="text-amber-700 font-medium">Viewing as: {proxyUser.full_name}</span>
+            <span className="text-amber-700 font-medium">{t.header.viewingAs}: {proxyUser.full_name}</span>
             <button
               onClick={handleEndProxy}
               className="ml-1 text-amber-600 hover:text-amber-800 font-semibold text-xs underline"
             >
-              End Session
+              {t.header.endSession}
             </button>
           </div>
         )}
+
+        <LanguageSwitcher className="hidden sm:flex" />
 
         {profile && <NotificationBell userId={profile.id} />}
 
@@ -92,13 +97,17 @@ export function Header({ title }: { title?: string }) {
             <DropdownMenuItem asChild>
               <Link href="/profile" className="flex items-center cursor-pointer">
                 <UserCog className="h-4 w-4 mr-2" />
-                Profile Settings
+                {t.common.profileSettings}
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuItem className="sm:hidden focus:bg-transparent" onSelect={e => e.preventDefault()}>
+              <LanguageSwitcher />
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="sm:hidden" />
             <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600 focus:bg-red-50">
               <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
+              {t.common.signOut}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -8,6 +8,8 @@ import { getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
 import { loadUserPaths } from '@/lib/learning-paths'
 import { getPortalView } from '@/lib/view'
 import { getProxyTarget } from '@/lib/proxy'
+import { getDict } from '@/lib/i18n/get-locale'
+import { fmt } from '@/lib/i18n/dictionaries'
 import { NextStepHero, type NextAction } from '@/components/dashboard/NextStepHero'
 import { JourneyDots } from '@/components/paths/JourneyDots'
 import { ProgressRing } from '@/components/ui/progress-ring'
@@ -16,6 +18,7 @@ import { AssignedTrainings, type DashboardTraining } from '@/components/dashboar
 import type { Profile, Module, Assignment, Certificate, JourneyCertificate } from '@/types'
 
 export default async function DashboardPage() {
+  const t = await getDict()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -170,18 +173,18 @@ export default async function DashboardPage() {
   const notStartedItem = assignmentsWithProgress.find(a => a.percent === 0 && !a.optional)
 
   const stepOf = (p: (typeof userPaths)[number]) => `${p.path.title} · step ${p.completedSteps + 1} of ${p.steps.length}`
-  const minutesText = (m?: number | null) => (m ? `About ${m} min` : undefined)
+  const minutesText = (m?: number | null) => (m ? `${t.common.about} ${m} ${t.common.minutes}` : undefined)
 
   let nextAction: NextAction | null = null
   if (overdueItem) {
     nextAction = {
       reason: 'overdue',
       title: overdueItem.module?.title ?? 'Training',
-      subtitle: `Due ${formatDate(overdueItem.due_date)}${overdueItem.nextSectionTitle && overdueItem.percent > 0 ? ` · Next up: ${overdueItem.nextSectionTitle}` : ''}`,
+      subtitle: `${t.common.due} ${formatDate(overdueItem.due_date)}${overdueItem.nextSectionTitle && overdueItem.percent > 0 ? ` · ${t.common.nextUp}: ${overdueItem.nextSectionTitle}` : ''}`,
       meta: minutesText(overdueItem.module?.estimated_minutes),
       href: `/training/${overdueItem.module_id}`,
       percent: overdueItem.percent,
-      cta: overdueItem.percent > 0 ? 'Continue' : 'Start now',
+      cta: overdueItem.percent > 0 ? t.common.continue : t.common.startNow,
     }
   } else if (onboardingJourney?.nextStep) {
     nextAction = {
@@ -191,17 +194,17 @@ export default async function DashboardPage() {
       meta: minutesText(onboardingJourney.nextStep.module.estimated_minutes),
       href: `/training/${onboardingJourney.nextStep.module.id}`,
       percent: onboardingJourney.percent,
-      cta: onboardingJourney.nextStep.percent > 0 ? 'Continue' : 'Start',
+      cta: onboardingJourney.nextStep.percent > 0 ? t.common.continue : t.common.start,
     }
   } else if (continueItem) {
     nextAction = {
       reason: 'continue',
       title: continueItem.module?.title ?? 'Training',
-      subtitle: continueItem.nextSectionTitle ? `Next up: ${continueItem.nextSectionTitle}` : undefined,
+      subtitle: continueItem.nextSectionTitle ? `${t.common.nextUp}: ${continueItem.nextSectionTitle}` : undefined,
       meta: minutesText(continueItem.module?.estimated_minutes),
       href: `/training/${continueItem.module_id}`,
       percent: continueItem.percent,
-      cta: 'Resume',
+      cta: t.common.resume,
     }
   } else if (otherJourney?.nextStep) {
     nextAction = {
@@ -211,17 +214,17 @@ export default async function DashboardPage() {
       meta: minutesText(otherJourney.nextStep.module.estimated_minutes),
       href: `/training/${otherJourney.nextStep.module.id}`,
       percent: otherJourney.percent,
-      cta: otherJourney.nextStep.percent > 0 ? 'Continue' : 'Start',
+      cta: otherJourney.nextStep.percent > 0 ? t.common.continue : t.common.start,
     }
   } else if (notStartedItem) {
     nextAction = {
       reason: 'start',
       title: notStartedItem.module?.title ?? 'Training',
-      subtitle: notStartedItem.due_date ? `Due ${formatDate(notStartedItem.due_date)}` : notStartedItem.module?.auto_assign_all ? 'Required for everyone' : undefined,
+      subtitle: notStartedItem.due_date ? `${t.common.due} ${formatDate(notStartedItem.due_date)}` : notStartedItem.module?.auto_assign_all ? t.common.requiredForEveryone : undefined,
       meta: minutesText(notStartedItem.module?.estimated_minutes),
       href: `/training/${notStartedItem.module_id}`,
       percent: 0,
-      cta: 'Start',
+      cta: t.common.start,
     }
   }
 
@@ -310,21 +313,21 @@ export default async function DashboardPage() {
           <div className="sm:border-l sm:border-white/20 sm:pl-6">
             <p className="text-xs uppercase tracking-widest text-[#7CC24A] font-semibold">UCB Training Portal</p>
             <h2 className="text-xl font-bold">Welcome back, {(proxyTarget?.full_name ?? profile.full_name).split(' ')[0]}!</h2>
-            <p className="text-sm text-white/70 mt-0.5">You're crushing it — keep that training streak alive! 🌱</p>
+            <p className="text-sm text-white/70 mt-0.5">{t.dashboard.streak}</p>
           </div>
         </div>
 
-        <NextStepHero action={nextAction} />
+        <NextStepHero action={nextAction} t={t} />
 
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
           {[
-            { label: 'Assigned', value: assignmentsWithProgress.length, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-50' },
-            { label: 'Completed', value: completedCount, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50' },
-            { label: 'In Progress', value: inProgressCount, icon: TrendingUp, color: 'text-amber-600', bg: 'bg-amber-50' },
-            { label: 'Not Started', value: notStartedCount, icon: Clock, color: 'text-slate-500', bg: 'bg-slate-50' },
-            { label: 'Overdue', value: overdueCount, icon: AlertTriangle, color: overdueCount > 0 ? 'text-red-600' : 'text-slate-400', bg: overdueCount > 0 ? 'bg-red-50' : 'bg-slate-50' },
+            { key: 'assigned', label: t.dashboard.assigned, value: assignmentsWithProgress.length, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-50' },
+            { key: 'completed', label: t.dashboard.completed, value: completedCount, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50' },
+            { key: 'inProgress', label: t.dashboard.inProgress, value: inProgressCount, icon: TrendingUp, color: 'text-amber-600', bg: 'bg-amber-50' },
+            { key: 'notStarted', label: t.dashboard.notStarted, value: notStartedCount, icon: Clock, color: 'text-slate-500', bg: 'bg-slate-50' },
+            { key: 'overdue', label: t.dashboard.overdue, value: overdueCount, icon: AlertTriangle, color: overdueCount > 0 ? 'text-red-600' : 'text-slate-400', bg: overdueCount > 0 ? 'bg-red-50' : 'bg-slate-50' },
           ].map((stat) => (
-            <Card key={stat.label} className={stat.label === 'Overdue' ? 'col-span-2 lg:col-span-1' : undefined}>
+            <Card key={stat.key} className={stat.key === 'overdue' ? 'col-span-2 lg:col-span-1' : undefined}>
               <CardContent className="p-4 sm:p-5">
                 <div className="flex items-center justify-between">
                   <div>
@@ -345,9 +348,9 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
-                <Route className="h-5 w-5 text-blue-600" /> My Learning Journeys
+                <Route className="h-5 w-5 text-blue-600" /> {t.dashboard.myLearningJourneys}
               </CardTitle>
-              <Link href="/paths" className="text-sm text-blue-600 hover:underline">View roadmaps</Link>
+              <Link href="/paths" className="text-sm text-blue-600 hover:underline">{t.dashboard.viewRoadmaps}</Link>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -367,13 +370,13 @@ export default async function DashboardPage() {
                             )}
                             {p.path.title}
                           </p>
-                          <span className="text-xs text-slate-500 shrink-0">{p.completedSteps}/{p.steps.length} steps</span>
+                          <span className="text-xs text-slate-500 shrink-0">{p.completedSteps}/{p.steps.length} {t.dashboard.steps}</span>
                         </div>
                         <div className="overflow-x-auto py-1">
                           <JourneyDots steps={p.steps} />
                         </div>
                         {p.nextStep && (
-                          <p className="text-sm text-slate-500 truncate">Next: {p.nextStep.module.title}</p>
+                          <p className="text-sm text-slate-500 truncate">{t.dashboard.next}: {p.nextStep.module.title}</p>
                         )}
                       </div>
                     </div>
@@ -386,10 +389,10 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>My Assigned Trainings</CardTitle>
+            <CardTitle>{t.dashboard.myAssignedTrainings}</CardTitle>
           </CardHeader>
           <CardContent>
-            <AssignedTrainings trainings={dashboardTrainings} />
+            <AssignedTrainings trainings={dashboardTrainings} t={t} />
           </CardContent>
         </Card>
 
@@ -398,9 +401,9 @@ export default async function DashboardPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
-                <Lightbulb className="h-5 w-5 text-amber-500" /> Recommended for you
+                <Lightbulb className="h-5 w-5 text-amber-500" /> {t.dashboard.recommendedForYou}
               </CardTitle>
-              <Link href="/training" className="text-sm text-blue-600 hover:underline">Browse all courses</Link>
+              <Link href="/training" className="text-sm text-blue-600 hover:underline">{t.dashboard.browseAllCourses}</Link>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -435,8 +438,8 @@ export default async function DashboardPage() {
         {/* Score summary */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>My Score Summary</CardTitle>
-            <Link href="/score-summary" className="text-sm text-blue-600 hover:underline">View full history</Link>
+            <CardTitle>{t.dashboard.myScoreSummary}</CardTitle>
+            <Link href="/score-summary" className="text-sm text-blue-600 hover:underline">{t.dashboard.viewFullHistory}</Link>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -445,7 +448,7 @@ export default async function DashboardPage() {
                   <Target className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Average Score</p>
+                  <p className="text-xs text-slate-500">{t.dashboard.averageScore}</p>
                   <p className="text-xl font-bold text-slate-900">{avgScore !== null ? `${avgScore}%` : '—'}</p>
                 </div>
               </div>
@@ -454,7 +457,7 @@ export default async function DashboardPage() {
                   <Award className="h-5 w-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Certificates Earned</p>
+                  <p className="text-xs text-slate-500">{t.dashboard.certificatesEarned}</p>
                   <p className="text-xl font-bold text-slate-900">{myCertificates?.length ?? 0}</p>
                 </div>
               </div>
@@ -463,7 +466,7 @@ export default async function DashboardPage() {
                   <TrendingUp className="h-5 w-5 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Quiz Attempts</p>
+                  <p className="text-xs text-slate-500">{t.dashboard.quizAttempts}</p>
                   <p className="text-xl font-bold text-slate-900">{quizAttempts?.length ?? 0}</p>
                 </div>
               </div>
@@ -474,14 +477,14 @@ export default async function DashboardPage() {
         {/* My certificates */}
         <Card>
           <CardHeader>
-            <CardTitle>My Certificates</CardTitle>
+            <CardTitle>{t.dashboard.myCertificates}</CardTitle>
           </CardHeader>
           <CardContent>
             {(!myCertificates || myCertificates.length === 0) && journeyCerts.length === 0 ? (
               <div className="text-center py-10">
                 <Award className="h-10 w-10 text-slate-300 mx-auto mb-2" />
-                <p className="text-slate-500 font-medium text-sm">No certificates yet</p>
-                <p className="text-slate-400 text-xs mt-1">Complete a training to earn one automatically.</p>
+                <p className="text-slate-500 font-medium text-sm">{t.dashboard.noCertificatesYet}</p>
+                <p className="text-slate-400 text-xs mt-1">{t.dashboard.noCertificatesBody}</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -493,10 +496,10 @@ export default async function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-slate-900 text-sm truncate">
                         {jc.journey_title}
-                        <span className="ml-2 rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">Journey</span>
+                        <span className="ml-2 rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">{t.dashboard.journey}</span>
                       </p>
                       <p className="text-xs text-slate-500">
-                        Issued {formatDate(jc.issued_at)} · all {jc.courses_count} {jc.courses_count === 1 ? 'course' : 'courses'} completed
+                        {t.dashboard.issued} {formatDate(jc.issued_at)} · {fmt(t.dashboard.allCoursesCompleted, { count: jc.courses_count })}
                       </p>
                     </div>
                     <a
@@ -505,7 +508,7 @@ export default async function DashboardPage() {
                       rel="noopener noreferrer"
                       className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline shrink-0"
                     >
-                      <Download className="h-3.5 w-3.5" /> Download
+                      <Download className="h-3.5 w-3.5" /> {t.common.download}
                     </a>
                   </div>
                 ))}
@@ -517,8 +520,8 @@ export default async function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-slate-900 text-sm truncate">{cert.module_title}</p>
                       <p className="text-xs text-slate-400">
-                        Issued {formatDate(cert.issued_at)}
-                        {cert.max_score ? ` · Score: ${cert.score}/${cert.max_score}` : ''}
+                        {t.dashboard.issued} {formatDate(cert.issued_at)}
+                        {cert.max_score ? ` · ${t.history.score}: ${cert.score}/${cert.max_score}` : ''}
                       </p>
                     </div>
                     <a
@@ -527,7 +530,7 @@ export default async function DashboardPage() {
                       rel="noopener noreferrer"
                       className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline shrink-0"
                     >
-                      <Download className="h-3.5 w-3.5" /> Download
+                      <Download className="h-3.5 w-3.5" /> {t.common.download}
                     </a>
                   </div>
                 ))}

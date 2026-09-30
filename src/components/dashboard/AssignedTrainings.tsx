@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { cn, formatDate, getCategoryColor, getCategoryLabel } from '@/lib/utils'
+import type { Dict } from '@/lib/i18n/dictionaries'
 
 export interface DashboardTraining {
   moduleId: string
@@ -25,40 +26,40 @@ export interface DashboardTraining {
 
 type Filter = 'all' | 'required' | 'in_progress' | 'overdue' | 'completed'
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'required', label: 'Required' },
-  { key: 'in_progress', label: 'In progress' },
-  { key: 'overdue', label: 'Overdue' },
-  { key: 'completed', label: 'Completed' },
-]
-
-function matches(t: DashboardTraining, filter: Filter) {
+function matches(item: DashboardTraining, filter: Filter) {
   switch (filter) {
-    case 'required': return t.required && t.percent < 100
-    case 'in_progress': return t.percent > 0 && t.percent < 100
-    case 'overdue': return t.overdue
-    case 'completed': return t.percent === 100
+    case 'required': return item.required && item.percent < 100
+    case 'in_progress': return item.percent > 0 && item.percent < 100
+    case 'overdue': return item.overdue
+    case 'completed': return item.percent === 100
     default: return true
   }
 }
 
-export function AssignedTrainings({ trainings }: { trainings: DashboardTraining[] }) {
+export function AssignedTrainings({ trainings, t }: { trainings: DashboardTraining[]; t: Dict }) {
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
 
+  const FILTERS: { key: Filter; label: string }[] = [
+    { key: 'all', label: t.assignedTrainings.filterAll },
+    { key: 'required', label: t.common.required },
+    { key: 'in_progress', label: t.assignedTrainings.filterInProgress },
+    { key: 'overdue', label: t.common.overdue },
+    { key: 'completed', label: t.common.complete },
+  ]
+
   const counts = useMemo(() => {
     const c = {} as Record<Filter, number>
-    for (const f of FILTERS) c[f.key] = trainings.filter(t => matches(t, f.key)).length
+    for (const f of FILTERS) c[f.key] = trainings.filter(item => matches(item, f.key)).length
     return c
-  }, [trainings])
+  }, [trainings, FILTERS])
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return trainings.filter(t => {
-      if (!matches(t, filter)) return false
+    return trainings.filter(item => {
+      if (!matches(item, filter)) return false
       if (!q) return true
-      return t.title.toLowerCase().includes(q) || getCategoryLabel(t.category).toLowerCase().includes(q)
+      return item.title.toLowerCase().includes(q) || getCategoryLabel(item.category).toLowerCase().includes(q)
     })
   }, [trainings, filter, query])
 
@@ -66,8 +67,8 @@ export function AssignedTrainings({ trainings }: { trainings: DashboardTraining[
     return (
       <div className="text-center py-12">
         <BookOpen className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-        <p className="text-slate-500 font-medium">No trainings assigned yet</p>
-        <p className="text-slate-400 text-sm mt-1">Your manager will assign trainings to you</p>
+        <p className="text-slate-500 font-medium">{t.assignedTrainings.noneAssignedTitle}</p>
+        <p className="text-slate-400 text-sm mt-1">{t.assignedTrainings.noneAssignedBody}</p>
       </div>
     )
   }
@@ -100,66 +101,66 @@ export function AssignedTrainings({ trainings }: { trainings: DashboardTraining[
           <Input
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search my trainings"
+            placeholder={t.assignedTrainings.searchPlaceholder}
             className="pl-9"
-            aria-label="Search my trainings"
+            aria-label={t.assignedTrainings.searchPlaceholder}
           />
         </div>
       </div>
 
       {visible.length === 0 ? (
-        <p className="text-center text-sm text-slate-400 py-8">No trainings match.</p>
+        <p className="text-center text-sm text-slate-400 py-8">{t.assignedTrainings.noMatches}</p>
       ) : (
         <div className="space-y-3">
-          {visible.map(t => (
+          {visible.map(item => (
             <Link
-              key={t.moduleId}
-              href={`/training/${t.moduleId}`}
+              key={item.moduleId}
+              href={`/training/${item.moduleId}`}
               className={cn(
                 'flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-all group',
-                t.overdue
+                item.overdue
                   ? 'border-red-300 ring-1 ring-red-200 bg-red-50/40 hover:bg-red-50'
-                  : t.required
+                  : item.required
                     ? 'border-amber-300 ring-1 ring-amber-300 bg-amber-50/40 hover:bg-amber-50'
                     : 'border-slate-200 hover:border-blue-200 hover:bg-blue-50/30'
               )}
             >
               <div
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white font-bold text-lg"
-                style={{ backgroundColor: getCategoryColor(t.category) }}
+                style={{ backgroundColor: getCategoryColor(item.category) }}
               >
-                {t.title.charAt(0)}
+                {item.title.charAt(0)}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">
-                    {t.title}
+                    {item.title}
                   </p>
-                  {t.overdue && (
+                  {item.overdue && (
                     <Badge variant="danger" className="flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" /> Overdue
+                      <AlertTriangle className="h-3 w-3" /> {t.common.overdue}
                     </Badge>
                   )}
-                  {t.required && (
+                  {item.required && (
                     <Badge className="bg-amber-400 text-amber-950 flex items-center gap-1">
-                      <Star className="h-3 w-3 fill-current" /> Required
+                      <Star className="h-3 w-3 fill-current" /> {t.common.required}
                     </Badge>
                   )}
-                  {t.optional && <Badge variant="outline">Optional</Badge>}
-                  <Badge variant={t.percent === 100 ? 'success' : t.percent > 0 ? 'warning' : 'outline'}>
-                    {t.percent === 100 ? 'Complete' : t.percent > 0 ? 'In Progress' : 'Not Started'}
+                  {item.optional && <Badge variant="outline">{t.common.optional}</Badge>}
+                  <Badge variant={item.percent === 100 ? 'success' : item.percent > 0 ? 'warning' : 'outline'}>
+                    {item.percent === 100 ? t.common.complete : item.percent > 0 ? t.common.inProgress : t.common.notStarted}
                   </Badge>
                 </div>
                 <p className="text-sm text-slate-500 mt-0.5">
-                  {getCategoryLabel(t.category)} · {t.minutes} min
-                  {t.dueDate && ` · Due ${formatDate(t.dueDate)}`}
+                  {getCategoryLabel(item.category)} · {item.minutes} min
+                  {item.dueDate && ` · ${t.common.due} ${formatDate(item.dueDate)}`}
                 </p>
-                {t.percent > 0 && t.percent < 100 && t.nextSectionTitle && (
-                  <p className="text-xs text-blue-700 mt-0.5 truncate">Next up: {t.nextSectionTitle}</p>
+                {item.percent > 0 && item.percent < 100 && item.nextSectionTitle && (
+                  <p className="text-xs text-blue-700 mt-0.5 truncate">{t.common.nextUp}: {item.nextSectionTitle}</p>
                 )}
                 <div className="flex items-center gap-2 mt-2">
-                  <Progress value={t.percent} className="flex-1 h-1.5" />
-                  <span className="text-xs text-slate-500 shrink-0">{t.percent}%</span>
+                  <Progress value={item.percent} className="flex-1 h-1.5" />
+                  <span className="text-xs text-slate-500 shrink-0">{item.percent}%</span>
                 </div>
               </div>
             </Link>

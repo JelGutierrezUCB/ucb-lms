@@ -5,6 +5,8 @@ import { BookOpen } from 'lucide-react'
 import { CatalogGrid, type CatalogItem } from '@/components/training/CatalogGrid'
 import { isProtectedModule } from '@/lib/protected-modules'
 import { getProxyTarget } from '@/lib/proxy'
+import { getDict } from '@/lib/i18n/get-locale'
+import { fmt } from '@/lib/i18n/dictionaries'
 import type { Module } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -15,6 +17,7 @@ export default async function TrainingPage({
   searchParams: Promise<{ as?: string }>
 }) {
   const params = await searchParams
+  const t = await getDict()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -178,18 +181,18 @@ export default async function TrainingPage({
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title={proxyName ? `Training for ${proxyName}` : 'Training Catalog'} />
+      <Header title={proxyName ? fmt(t.catalog.trainingFor, { name: proxyName }) : t.catalog.title} />
       <main className="flex-1 p-4 sm:p-6">
         {allModules.length === 0 ? (
           <div className="text-center py-20">
             <BookOpen className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">No trainings available</p>
+            <p className="text-slate-500 font-medium">{t.catalog.noTrainingsAvailable}</p>
             <p className="text-slate-400 text-sm mt-1">
               {isProxy
-                ? `${proxyName} has no training assigned yet`
+                ? fmt(t.catalog.proxyNoTraining, { name: proxyName ?? '' })
                 : currentProfile?.role === 'employee'
-                  ? 'Your manager will assign trainings to you'
-                  : 'Publish a module to make it visible here'}
+                  ? t.assignedTrainings.noneAssignedBody
+                  : t.catalog.publishToShow}
             </p>
           </div>
         ) : (
@@ -197,6 +200,7 @@ export default async function TrainingPage({
             items={items}
             asParam={asParam}
             allowScopeToggle={canBrowseAll && availableModules.length > 0}
+            t={t}
           />
         )}
       </main>

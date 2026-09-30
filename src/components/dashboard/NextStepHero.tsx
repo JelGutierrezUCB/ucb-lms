@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { AlertTriangle, ArrowRight, PartyPopper, PlayCircle, Route, Sparkles } from 'lucide-react'
 import { ProgressRing } from '@/components/ui/progress-ring'
 import { cn } from '@/lib/utils'
+import type { Dict } from '@/lib/i18n/dictionaries'
 
 export type NextActionReason = 'overdue' | 'onboarding' | 'continue' | 'journey' | 'start'
 
@@ -16,40 +17,23 @@ export interface NextAction {
   cta: string
 }
 
-const REASON: Record<NextActionReason, { label: string; icon: React.ElementType; chip: string; card: string }> = {
-  overdue: {
-    label: 'Overdue — start here',
-    icon: AlertTriangle,
-    chip: 'bg-red-100 text-red-800',
-    card: 'from-red-700 to-red-600',
-  },
-  onboarding: {
-    label: 'Your onboarding journey',
-    icon: Sparkles,
-    chip: 'bg-white/20 text-white',
-    card: 'from-blue-700 to-indigo-600',
-  },
-  continue: {
-    label: 'Pick up where you left off',
-    icon: PlayCircle,
-    chip: 'bg-white/20 text-white',
-    card: 'from-blue-700 to-blue-600',
-  },
-  journey: {
-    label: 'Next in your learning journey',
-    icon: Route,
-    chip: 'bg-white/20 text-white',
-    card: 'from-blue-700 to-blue-600',
-  },
-  start: {
-    label: 'Start here',
-    icon: PlayCircle,
-    chip: 'bg-white/20 text-white',
-    card: 'from-blue-700 to-blue-600',
-  },
+const REASON_STYLE: Record<NextActionReason, { icon: React.ElementType; chip: string; card: string }> = {
+  overdue: { icon: AlertTriangle, chip: 'bg-red-100 text-red-800', card: 'from-red-700 to-red-600' },
+  onboarding: { icon: Sparkles, chip: 'bg-white/20 text-white', card: 'from-blue-700 to-indigo-600' },
+  continue: { icon: PlayCircle, chip: 'bg-white/20 text-white', card: 'from-blue-700 to-blue-600' },
+  journey: { icon: Route, chip: 'bg-white/20 text-white', card: 'from-blue-700 to-blue-600' },
+  start: { icon: PlayCircle, chip: 'bg-white/20 text-white', card: 'from-blue-700 to-blue-600' },
 }
 
-export function NextStepHero({ action }: { action: NextAction | null }) {
+export function NextStepHero({ action, t }: { action: NextAction | null; t: Dict }) {
+  const reasonLabel: Record<NextActionReason, string> = {
+    overdue: t.dashboard.reasonOverdue,
+    onboarding: t.dashboard.reasonOnboarding,
+    continue: t.dashboard.reasonContinue,
+    journey: t.dashboard.reasonJourney,
+    start: t.dashboard.reasonStart,
+  }
+
   if (!action) {
     return (
       <div className="rounded-2xl border border-green-200 bg-green-50 p-5 sm:p-6 flex items-center gap-4">
@@ -57,20 +41,20 @@ export function NextStepHero({ action }: { action: NextAction | null }) {
           <PartyPopper className="h-6 w-6 text-green-700" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-green-900">You&apos;re all caught up</p>
-          <p className="text-sm text-green-800/80">Nothing is waiting on you right now. Browse the course catalog to keep learning.</p>
+          <p className="font-semibold text-green-900">{t.dashboard.allCaughtUp}</p>
+          <p className="text-sm text-green-800/80">{t.dashboard.allCaughtUpBody}</p>
         </div>
         <Link
           href="/training"
           className="hidden sm:inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800"
         >
-          Browse courses <ArrowRight className="h-4 w-4" />
+          {t.dashboard.browseCourses} <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
     )
   }
 
-  const r = REASON[action.reason]
+  const r = REASON_STYLE[action.reason]
   const Icon = r.icon
   return (
     <Link href={action.href} className="group block">
@@ -87,7 +71,7 @@ export function NextStepHero({ action }: { action: NextAction | null }) {
           />
           <div className="flex-1 min-w-0 space-y-1.5">
             <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold', r.chip)}>
-              <Icon className="h-3.5 w-3.5" /> {r.label}
+              <Icon className="h-3.5 w-3.5" /> {reasonLabel[action.reason]}
             </span>
             <p className="text-xl sm:text-2xl font-bold leading-tight">{action.title}</p>
             {action.subtitle && <p className="text-sm text-white/85 truncate">{action.subtitle}</p>}
