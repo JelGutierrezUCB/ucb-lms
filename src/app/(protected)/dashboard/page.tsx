@@ -17,6 +17,8 @@ import { isProtectedModule } from '@/lib/protected-modules'
 import { AssignedTrainings, type DashboardTraining } from '@/components/dashboard/AssignedTrainings'
 import { CertificatePreviewButton } from '@/components/certificates/CertificatePreviewButton'
 import type { Profile, Module, Assignment, Certificate, JourneyCertificate } from '@/types'
+import { ReviewActionCard } from '@/components/reviews/ReviewActionCard'
+import { getReviewActionItems } from '@/lib/introReviews/dashboard'
 
 export default async function DashboardPage() {
   const t = await getDict()
@@ -297,6 +299,12 @@ export default async function DashboardPage() {
     .order('issued_at', { ascending: false }) as { data: JourneyCertificate[] | null }
   const journeyCerts = myJourneyCertificates ?? []
 
+  // Introductory reviews waiting on the signed-in person (not shown while
+  // viewing someone else's portal)
+  const reviewActions = proxyTarget
+    ? { items: [], orgOverdue: 0 }
+    : await getReviewActionItems(supabase, user.id, profile.role)
+
   return (
     <div className="flex flex-col flex-1 overflow-auto">
       <Header title={proxyTarget ? `${proxyTarget.full_name}'s Dashboard` : 'Dashboard'} />
@@ -319,6 +327,8 @@ export default async function DashboardPage() {
         </div>
 
         <NextStepHero action={nextAction} t={t} />
+
+        <ReviewActionCard items={reviewActions.items} />
 
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
           {[

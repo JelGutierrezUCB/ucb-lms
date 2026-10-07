@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -21,8 +21,12 @@ import {
   Target,
   Gauge,
   X,
+  CalendarCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
+import { reviewAction } from '@/lib/introReviews/actions'
+import type { ReviewLite, SignerRole } from '@/lib/introReviews/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { useMobileNav } from '@/contexts/MobileNavContext'
 import { useView } from '@/contexts/ViewContext'
@@ -40,6 +44,8 @@ interface NavItem {
   roles: string[]
   // Match the exact path only (dashboards, whose paths are prefixes of others)
   exact?: boolean
+  // Only show once the person takes part in at least one introductory review
+  showWhen?: 'hasReviews'
 }
 
 // Learner view: everything a person needs to do their own training. Same for
@@ -51,6 +57,7 @@ const learnerItems: NavItem[] = [
   { href: '/training-history', label: 'My History', labelKey: 'myHistory', icon: <History className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
   { href: '/my-certificates', label: 'My Certificates', labelKey: 'myCertificates', icon: <Award className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
   { href: '/my-skills', label: 'My Skills', labelKey: 'mySkills', icon: <Target className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
+  { href: '/reviews', label: 'Introductory Reviews', icon: <CalendarCheck className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'], showWhen: 'hasReviews' },
 ]
 
 // Admin / manager view: managing people, courses, journeys and reporting.
@@ -68,6 +75,7 @@ const adminItems: NavItem[] = [
   { href: '/reports', label: 'Reports', icon: <BarChart3 className="h-5 w-5" />, roles: ['admin', 'manager'] },
   { href: '/certificates', label: 'Certificates', icon: <Award className="h-5 w-5" />, roles: ['admin', 'manager'] },
   { href: '/training-history?tab=courses', label: 'Course Completions', icon: <ClipboardCheck className="h-5 w-5" />, roles: ['admin', 'manager'] },
+  { href: '/reviews', label: 'Introductory Reviews', icon: <CalendarCheck className="h-5 w-5" />, roles: ['admin', 'manager'] },
 ]
 
 function SidebarBody() {
@@ -76,13 +84,41 @@ function SidebarBody() {
   const { view, canSwitch, setView } = useView()
   const { proxyUser } = useProxy()
   const { t } = useLocale()
+  const [reviewInfo, setReviewInfo] = useState({ any: false, pending: 0 })
+
+  // Does this person take part in any introductory review, and how many are
+  // waiting on them? Row-level security means the query only returns reviews
+  // they're part of. Refreshed on every navigation so the badge stays current.
+  useEffect(() => {
+    if (!profile?.id) return
+    let cancelled = false
+    const supabase = createClient()
+    ;(async () => {
+      const { data } = await supabase
+        .from('intro_reviews')
+        .select('id, user_id, review_day, due_date, supervisor_id, evaluator_id, status, call_at, slots, intro_review_signatures(role)')
+        .neq('status', 'cancelled')
+      if (cancelled || !data) return
+      let pending = 0
+      for (const r of data as unknown as (ReviewLite & { intro_review_signatures?: { role: SignerRole }[] })[]) {
+        const signed = (r.intro_review_signatures ?? []).map(s => s.role)
+        if (reviewAction(r, signed, profile.id)) pending++
+      }
+      setReviewInfo({ any: data.length > 0, pending })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [profile?.id, pathname])
 
   if (!profile) return null
 
   // Viewing someone else's portal always shows the learner nav — the point is
   // to see exactly what they see, regardless of the admin/manager's own view preference.
   const learnerView = view === 'learner' || !!proxyUser
-  const items = learnerView ? learnerItems : adminItems.filter(item => item.roles.includes(profile.role))
+  const items = (learnerView ? learnerItems : adminItems.filter(item => item.roles.includes(profile.role))).filter(
+    item => item.showWhen !== 'hasReviews' || reviewInfo.any
+  )
   const consoleName = profile.role === 'admin' ? 'Admin' : 'Manager'
 
   const isActive = (item: NavItem) => {
@@ -149,7 +185,12 @@ function SidebarBody() {
             )}
           >
             {item.icon}
-            {item.labelKey ? t.nav[item.labelKey] : item.label}
+            <span className="flex-1">{item.labelKey ? t.nav[item.labelKey] : item.label}</span>
+            {item.href === '/reviews' && reviewInfo.pending > 0 && (
+              <span className="ml-auto min-w-[1.25rem] rounded-full bg-amber-500 px-1.5 py-0.5 text-center text-xs font-bold text-white">
+                {reviewInfo.pending}
+              </span>
+            )}
           </Link>
         ))}
       </nav>

@@ -6,7 +6,20 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 // See https://resend.com/domains
 const FROM = process.env.RESEND_FROM_EMAIL ?? 'UCB Training <onboarding@resend.dev>'
 
-export async function sendEmail(opts: { to: string; subject: string; html: string }) {
+// Calendar invites need an ORGANIZER that matches who actually sent the
+// email, so RSVPs come back to a real inbox.
+export function getSender(): { email: string; name: string } {
+  const m = FROM.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/)
+  return m ? { name: m[1].trim() || 'UCB Training', email: m[2].trim() } : { name: 'UCB Training', email: FROM.trim() }
+}
+
+export interface EmailAttachment {
+  filename: string
+  content: string | Buffer
+  contentType?: string
+}
+
+export async function sendEmail(opts: { to: string; subject: string; html: string; attachments?: EmailAttachment[] }) {
   if (!resend) {
     console.warn('RESEND_API_KEY not set — skipping email send:', opts.subject, 'to', opts.to)
     return { skipped: true }
@@ -17,6 +30,7 @@ export async function sendEmail(opts: { to: string; subject: string; html: strin
       to: opts.to,
       subject: opts.subject,
       html: opts.html,
+      ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
     })
     if (error) console.error('Email send failed:', error)
     return { skipped: false, error }

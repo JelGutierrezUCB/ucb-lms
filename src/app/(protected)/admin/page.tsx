@@ -11,6 +11,8 @@ import { AdminActionButtons } from '@/components/admin/AdminActionButtons'
 import { formatDate } from '@/lib/utils'
 import { CertificatePreviewButton } from '@/components/certificates/CertificatePreviewButton'
 import type { Certificate } from '@/types'
+import { ReviewActionCard } from '@/components/reviews/ReviewActionCard'
+import { getReviewActionItems } from '@/lib/introReviews/dashboard'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +23,8 @@ export default async function AdminDashboardPage() {
 
   const { data: profile } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
+
+  const reviewActions = await getReviewActionItems(supabase, user.id, 'admin')
 
   // The admin's own score/certificates — admins can be assigned trainings
   // too (e.g. required-for-everyone modules), so this isn't always empty.
@@ -164,6 +168,8 @@ export default async function AdminDashboardPage() {
             <p className="text-sm text-white/70 mt-0.5">Growing greener, one completed training at a time. 🌱</p>
           </div>
         </div>
+
+        <ReviewActionCard items={reviewActions.items} orgOverdue={reviewActions.orgOverdue} />
 
         {/* Top stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

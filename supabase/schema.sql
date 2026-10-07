@@ -1728,3 +1728,6 @@ drop policy if exists "course_rule_targets_admin" on course_rule_targets;
 create policy "course_rule_targets_admin" on course_rule_targets for all
   using (exists (select 1 from profiles where id = auth.uid() and role = 'admin'))
   with check (exists (select 1 from profiles where id = auth.uid() and role = 'admin'));
+
+-- Introductory Reviews (7/30/60/90 business-day reviews + e-signatures):
+-- tables, RLS and seeded holidays live in supabase/intro_reviews.sql

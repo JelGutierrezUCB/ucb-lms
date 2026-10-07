@@ -1,5 +1,11 @@
 export type Role = 'admin' | 'manager' | 'employee'
 
+// Introductory-review scheduling: which holiday calendar applies to someone,
+// and when they're available for calls (in their own timezone).
+export type HolidayRegion = 'US' | 'PH'
+export type DayKey = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'
+export type WorkSchedule = Partial<Record<DayKey, { start: string; end: string } | null>>
+
 export interface Profile {
   id: string
   email: string
@@ -10,6 +16,11 @@ export interface Profile {
   company: string | null
   avatar_url?: string | null
   job_role_id?: string | null
+  start_date?: string | null // "First Day" — drives the introductory review schedule
+  job_title?: string | null
+  timezone?: string | null // IANA name, e.g. "America/Chicago", "Asia/Manila"
+  holiday_region?: HolidayRegion | null
+  work_schedule?: WorkSchedule | null
   is_active: boolean
   created_at: string
   updated_at: string

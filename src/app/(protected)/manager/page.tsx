@@ -7,6 +7,8 @@ import { Progress } from '@/components/ui/progress'
 import { Users, CheckCircle, Clock, AlertCircle, BarChart3, Play } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { ReviewActionCard } from '@/components/reviews/ReviewActionCard'
+import { getReviewActionItems } from '@/lib/introReviews/dashboard'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +19,8 @@ export default async function ManagerDashboardPage() {
 
   const { data: profile } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
   if (!['admin', 'manager'].includes(profile?.role ?? '')) redirect('/dashboard')
+
+  const reviewActions = await getReviewActionItems(supabase, user.id, profile?.role ?? 'manager')
 
   // Get employees under this manager
   const employeesQuery = supabase
@@ -100,6 +104,8 @@ export default async function ManagerDashboardPage() {
     <div className="flex flex-col flex-1 overflow-auto">
       <Header title="Manager Dashboard" />
       <main className="flex-1 p-6 space-y-6">
+
+        <ReviewActionCard items={reviewActions.items} />
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
