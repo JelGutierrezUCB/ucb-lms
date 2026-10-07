@@ -2,16 +2,24 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { BookOpen, CheckCircle, Clock, TrendingUp, Star, Target, Award, Download } from 'lucide-react'
+import { BookOpen, CheckCircle, Clock, TrendingUp, Target, Award, Download, AlertTriangle, Lightbulb, Route } from 'lucide-react'
 import Link from 'next/link'
-import { cn, getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
-import type { Profile, Module, Assignment, Certificate } from '@/types'
-import { ReviewActionCard } from '@/components/reviews/ReviewActionCard'
-import { getReviewActionItems } from '@/lib/introReviews/dashboard'
+import { getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
+import { loadUserPaths } from '@/lib/learning-paths'
+import { getPortalView } from '@/lib/view'
+import { getProxyTarget } from '@/lib/proxy'
+import { getDict } from '@/lib/i18n/get-locale'
+import { fmt } from '@/lib/i18n/dictionaries'
+import { NextStepHero, type NextAction } from '@/components/dashboard/NextStepHero'
+import { JourneyDots } from '@/components/paths/JourneyDots'
+import { ProgressRing } from '@/components/ui/progress-ring'
+import { isProtectedModule } from '@/lib/protected-modules'
+import { AssignedTrainings, type DashboardTraining } from '@/components/dashboard/AssignedTrainings'
+import { CertificatePreviewButton } from '@/components/certificates/CertificatePreviewButton'
+import type { Profile, Module, Assignment, Certificate, JourneyCertificate } from '@/types'
 
 export default async function DashboardPage() {
+  const t = await getDict()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -24,11 +32,18 @@ export default async function DashboardPage() {
 
   if (!profile) redirect('/login')
 
-  // Admins go to their dedicated dashboard
-  if (profile.role === 'admin') redirect('/admin')
-  if (profile.role === 'manager') redirect('/manager')
+  // An admin/manager viewing someone else's learner portal — everything below
+  // is scoped to that person instead of the signed-in admin/manager.
+  const proxyTarget = await getProxyTarget(user.id, profile.role)
+  const effectiveUserId = proxyTarget?.id ?? user.id
 
-  const reviewActions = await getReviewActionItems(supabase, user.id, profile.role)
+  // Admins and managers go to their own console's dashboard — unless they've
+  // switched to the learner view (this is their personal learning dashboard
+  // then), or they're viewing someone else's portal, which always shows here.
+  if (!proxyTarget && (await getPortalView(profile.role)) === 'admin') {
+    if (profile.role === 'admin') redirect('/admin')
+    if (profile.role === 'manager') redirect('/manager')
+  }
 
   // Employee dashboard. One assignment row per training when specific
   // trainings (not the whole module) were assigned, so group by module —
@@ -36,21 +51,22 @@ export default async function DashboardPage() {
   const { data: assignments } = await supabase
     .from('assignments')
     .select('*, module:modules(*)')
-    .eq('user_id', user.id)
+    .eq('user_id', effectiveUserId)
     .order('assigned_at', { ascending: false }) as { data: (Assignment & { module: Module })[] | null }
 
   const moduleIds = [...new Set((assignments ?? []).map(a => a.module_id))]
 
   const { data: sectionCounts } = await supabase
     .from('sections')
-    .select('module_id, id')
+    .select('module_id, id, title, order_index')
     .in('module_id', moduleIds.length ? moduleIds : [''])
     .eq('is_archived', false)
+    .order('order_index')
 
   const { data: completedSections } = await supabase
     .from('section_progress')
-    .select('section_id, sections!inner(module_id, is_archived)')
-    .eq('user_id', user.id)
+    .select('section_id, completed_at, sections!inner(module_id, is_archived)')
+    .eq('user_id', effectiveUserId)
     .eq('sections.is_archived', false)
 
   // Per module: null = whole module required; a Set = only these specific
@@ -77,45 +93,190 @@ export default async function DashboardPage() {
 
   const totalByModule: Record<string, number> = {}
   const completedByModule: Record<string, number> = {}
+  const lastActivityByModule: Record<string, string> = {}
+  const completedSectionIds = new Set<string>()
+  // Required sections per module, in course order — the first one not yet
+  // completed is where "Continue" should drop the learner.
+  const requiredSectionsInOrder = new Map<string, { id: string; title: string }[]>()
 
   for (const row of sectionCounts ?? []) {
     if (!isSectionRequired(row.module_id, row.id)) continue
     totalByModule[row.module_id] = (totalByModule[row.module_id] ?? 0) + 1
+    const list = requiredSectionsInOrder.get(row.module_id) ?? []
+    list.push({ id: row.id, title: row.title })
+    requiredSectionsInOrder.set(row.module_id, list)
   }
   for (const row of (completedSections ?? []) as any[]) {
     const moduleId = row.sections?.module_id
     if (moduleId && isSectionRequired(moduleId, row.section_id)) {
       completedByModule[moduleId] = (completedByModule[moduleId] ?? 0) + 1
+      completedSectionIds.add(row.section_id)
+      if (!lastActivityByModule[moduleId] || row.completed_at > lastActivityByModule[moduleId]) {
+        lastActivityByModule[moduleId] = row.completed_at
+      }
     }
   }
+
+  const today = new Date().toISOString().split('T')[0]
 
   const assignmentsWithProgress = [...byModule.entries()]
     .map(([moduleId, { rows }]) => {
       const dueDates = rows.map(r => r.due_date).filter(Boolean) as string[]
       const earliestDueDate = dueDates.length ? dueDates.sort()[0] : null
+      const percent = totalByModule[moduleId]
+        ? Math.round(((completedByModule[moduleId] ?? 0) / totalByModule[moduleId]) * 100)
+        : 0
+      const nextSection = (requiredSectionsInOrder.get(moduleId) ?? []).find(s => !completedSectionIds.has(s.id))
+      // Optional when every assignment for it is optional (set by an assignment rule)
+      const optional = rows.every(r => r.required === false)
       return {
         ...rows[0],
         module_id: moduleId,
         due_date: earliestDueDate,
         completed: completedByModule[moduleId] ?? 0,
         total: totalByModule[moduleId] ?? 0,
-        percent: totalByModule[moduleId]
-          ? Math.round(((completedByModule[moduleId] ?? 0) / totalByModule[moduleId]) * 100)
-          : 0,
+        percent,
+        optional,
+        overdue: !optional && !!earliestDueDate && earliestDueDate < today && percent < 100,
+        lastActivity: lastActivityByModule[moduleId] ?? null,
+        nextSectionTitle: nextSection?.title ?? null,
       }
     })
-    // Required (auto-assigned-to-everyone) trainings always pin to the top
-    .sort((a, b) => Number(b.module?.auto_assign_all) - Number(a.module?.auto_assign_all))
+    // Most urgent first: overdue, then required (auto-assigned-to-everyone),
+    // then in progress, then not started (soonest due date first), finished last.
+    .sort((a, b) => {
+      const rank = (x: typeof a) =>
+        x.percent === 100 ? 4 : x.overdue ? 0 : x.module?.auto_assign_all ? 1 : x.percent > 0 ? 2 : x.optional ? 3.5 : 3
+      return rank(a) - rank(b) || (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999')
+    })
 
   const completedCount = assignmentsWithProgress.filter(a => a.percent === 100).length
   const inProgressCount = assignmentsWithProgress.filter(a => a.percent > 0 && a.percent < 100).length
   const notStartedCount = assignmentsWithProgress.filter(a => a.percent === 0).length
+  const overdueCount = assignmentsWithProgress.filter(a => a.overdue).length
+
+  // "Continue where you left off": the in-progress training touched most recently.
+  const continueItem = assignmentsWithProgress
+    .filter(a => a.percent > 0 && a.percent < 100)
+    .sort((a, b) => (b.lastActivity ?? '').localeCompare(a.lastActivity ?? ''))[0] ?? null
+
+  // Learning paths (job-role / onboarding sequences). Empty until paths exist.
+  const userPaths = (await loadUserPaths(supabase, effectiveUserId)).filter(p => p.percent < 100)
+
+  // The one thing to do next, in priority order: something overdue, then the
+  // next step of an onboarding journey, then whatever was started most
+  // recently, then the next step of another journey, then anything not started.
+  const overdueItem = assignmentsWithProgress
+    .filter(a => a.overdue)
+    .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''))[0]
+  const onboardingJourney = userPaths.find(p => p.path.kind === 'onboarding' && p.nextStep)
+  const otherJourney = userPaths.find(p => p.path.kind !== 'onboarding' && p.nextStep)
+  const notStartedItem = assignmentsWithProgress.find(a => a.percent === 0 && !a.optional)
+
+  const stepOf = (p: (typeof userPaths)[number]) => `${p.path.title} · step ${p.completedSteps + 1} of ${p.steps.length}`
+  const minutesText = (m?: number | null) => (m ? `${t.common.about} ${m} ${t.common.minutes}` : undefined)
+
+  let nextAction: NextAction | null = null
+  if (overdueItem) {
+    nextAction = {
+      reason: 'overdue',
+      title: overdueItem.module?.title ?? 'Training',
+      subtitle: `${t.common.due} ${formatDate(overdueItem.due_date)}${overdueItem.nextSectionTitle && overdueItem.percent > 0 ? ` · ${t.common.nextUp}: ${overdueItem.nextSectionTitle}` : ''}`,
+      meta: minutesText(overdueItem.module?.estimated_minutes),
+      href: `/training/${overdueItem.module_id}`,
+      percent: overdueItem.percent,
+      cta: overdueItem.percent > 0 ? t.common.continue : t.common.startNow,
+    }
+  } else if (onboardingJourney?.nextStep) {
+    nextAction = {
+      reason: 'onboarding',
+      title: onboardingJourney.nextStep.module.title,
+      subtitle: stepOf(onboardingJourney),
+      meta: minutesText(onboardingJourney.nextStep.module.estimated_minutes),
+      href: `/training/${onboardingJourney.nextStep.module.id}`,
+      percent: onboardingJourney.percent,
+      cta: onboardingJourney.nextStep.percent > 0 ? t.common.continue : t.common.start,
+    }
+  } else if (continueItem) {
+    nextAction = {
+      reason: 'continue',
+      title: continueItem.module?.title ?? 'Training',
+      subtitle: continueItem.nextSectionTitle ? `${t.common.nextUp}: ${continueItem.nextSectionTitle}` : undefined,
+      meta: minutesText(continueItem.module?.estimated_minutes),
+      href: `/training/${continueItem.module_id}`,
+      percent: continueItem.percent,
+      cta: t.common.resume,
+    }
+  } else if (otherJourney?.nextStep) {
+    nextAction = {
+      reason: 'journey',
+      title: otherJourney.nextStep.module.title,
+      subtitle: stepOf(otherJourney),
+      meta: minutesText(otherJourney.nextStep.module.estimated_minutes),
+      href: `/training/${otherJourney.nextStep.module.id}`,
+      percent: otherJourney.percent,
+      cta: otherJourney.nextStep.percent > 0 ? t.common.continue : t.common.start,
+    }
+  } else if (notStartedItem) {
+    nextAction = {
+      reason: 'start',
+      title: notStartedItem.module?.title ?? 'Training',
+      subtitle: notStartedItem.due_date ? `${t.common.due} ${formatDate(notStartedItem.due_date)}` : notStartedItem.module?.auto_assign_all ? t.common.requiredForEveryone : undefined,
+      meta: minutesText(notStartedItem.module?.estimated_minutes),
+      href: `/training/${notStartedItem.module_id}`,
+      percent: 0,
+      cta: t.common.start,
+    }
+  }
+
+  const dashboardTrainings: DashboardTraining[] = assignmentsWithProgress.map(a => ({
+    moduleId: a.module_id,
+    title: a.module?.title ?? 'Untitled training',
+    category: a.module?.category ?? '',
+    minutes: a.module?.estimated_minutes ?? 0,
+    dueDate: a.due_date,
+    percent: a.percent,
+    required: !!a.module?.auto_assign_all,
+    optional: a.optional,
+    overdue: a.overdue,
+    nextSectionTitle: a.nextSectionTitle,
+  }))
+
+  // Recommended: published trainings not assigned to this employee, favoring
+  // the categories they already work in, then newest first. Only trainings
+  // that actually have content are suggested.
+  const { data: publishedModules } = await supabase
+    .from('modules')
+    .select('*')
+    .eq('is_published', true)
+    .order('created_at', { ascending: false }) as { data: Module[] | null }
+
+  const assignedIds = new Set(moduleIds)
+  const candidates = (publishedModules ?? []).filter(m => !assignedIds.has(m.id) && !isProtectedModule(m.id))
+  const { data: candidateSections } = await supabase
+    .from('sections')
+    .select('module_id')
+    .in('module_id', candidates.length ? candidates.map(m => m.id) : [''])
+    .eq('is_archived', false)
+  const modulesWithContent = new Set((candidateSections ?? []).map(s => s.module_id))
+
+  const categoryWeight: Record<string, number> = {}
+  for (const a of assignmentsWithProgress) {
+    const c = a.module?.category
+    if (c) categoryWeight[c] = (categoryWeight[c] ?? 0) + 1
+  }
+  const recommended = candidates
+    .filter(m => modulesWithContent.has(m.id))
+    .map((m, i) => ({ m, weight: categoryWeight[m.category] ?? 0, i }))
+    .sort((a, b) => b.weight - a.weight || a.i - b.i)
+    .slice(0, 4)
+    .map(x => x.m)
 
   // Score summary (condensed — full history lives at /score-summary)
   const { data: quizAttempts } = await supabase
     .from('quiz_attempts')
     .select('score, max_score')
-    .eq('user_id', user.id)
+    .eq('user_id', effectiveUserId)
   const scoredAttempts = (quizAttempts ?? []).filter(a => a.max_score > 0)
   const avgScore = scoredAttempts.length > 0
     ? Math.round(scoredAttempts.reduce((s, a) => s + (a.score / a.max_score) * 100, 0) / scoredAttempts.length)
@@ -125,41 +286,50 @@ export default async function DashboardPage() {
   const { data: myCertificates } = await supabase
     .from('certificates')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', effectiveUserId)
     .order('issued_at', { ascending: false }) as { data: Certificate[] | null }
+
+  // Journey certificates (earned by finishing every course in a journey)
+  const { data: myJourneyCertificates } = await supabase
+    .from('journey_certificates')
+    .select('*')
+    .eq('user_id', effectiveUserId)
+    .order('issued_at', { ascending: false }) as { data: JourneyCertificate[] | null }
+  const journeyCerts = myJourneyCertificates ?? []
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
-      <Header title="Dashboard" />
+      <Header title={proxyTarget ? `${proxyTarget.full_name}'s Dashboard` : 'Dashboard'} />
 
       <main className="flex-1 p-6 space-y-6">
         {/* Welcome banner */}
-        <div className="rounded-2xl bg-gradient-to-r from-[#241B4E] to-[#3a2d7a] p-6 text-white flex items-center gap-6">
-          <div className="bg-white rounded-xl p-3 shrink-0">
+        <div className="rounded-2xl bg-gradient-to-r from-[#281D73] to-[#402EB8] p-5 sm:p-6 text-white flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+          <div className="bg-white rounded-xl p-3 shrink-0 self-start">
             <img
               src="/branding/ucb-environmental-logo.png"
               alt="UCB Environmental"
               className="h-12 w-auto"
             />
           </div>
-          <div className="border-l border-white/20 pl-6">
-            <p className="text-xs uppercase tracking-widest text-[#7CC24A] font-semibold">UCB Training Portal</p>
-            <h2 className="text-xl font-bold">Welcome back, {profile.full_name.split(' ')[0]}!</h2>
-            <p className="text-sm text-white/70 mt-0.5">You're crushing it — keep that training streak alive! 🌱</p>
+          <div className="sm:border-l sm:border-white/20 sm:pl-6">
+            <p className="text-xs uppercase tracking-widest text-[#E25820] font-semibold">UCB Training Portal</p>
+            <h2 className="text-xl font-bold">Welcome back, {(proxyTarget?.full_name ?? profile.full_name).split(' ')[0]}!</h2>
+            <p className="text-sm text-white/70 mt-0.5">{t.dashboard.streak}</p>
           </div>
         </div>
 
-        <ReviewActionCard items={reviewActions.items} />
+        <NextStepHero action={nextAction} t={t} />
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
           {[
-            { label: 'Assigned', value: assignmentsWithProgress.length, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-50' },
-            { label: 'Completed', value: completedCount, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50' },
-            { label: 'In Progress', value: inProgressCount, icon: TrendingUp, color: 'text-amber-600', bg: 'bg-amber-50' },
-            { label: 'Not Started', value: notStartedCount, icon: Clock, color: 'text-slate-500', bg: 'bg-slate-50' },
+            { key: 'assigned', label: t.dashboard.assigned, value: assignmentsWithProgress.length, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-50' },
+            { key: 'completed', label: t.dashboard.completed, value: completedCount, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50' },
+            { key: 'inProgress', label: t.dashboard.inProgress, value: inProgressCount, icon: TrendingUp, color: 'text-amber-600', bg: 'bg-amber-50' },
+            { key: 'notStarted', label: t.dashboard.notStarted, value: notStartedCount, icon: Clock, color: 'text-slate-500', bg: 'bg-slate-50' },
+            { key: 'overdue', label: t.dashboard.overdue, value: overdueCount, icon: AlertTriangle, color: overdueCount > 0 ? 'text-red-600' : 'text-slate-400', bg: overdueCount > 0 ? 'bg-red-50' : 'bg-slate-50' },
           ].map((stat) => (
-            <Card key={stat.label}>
-              <CardContent className="p-5">
+            <Card key={stat.key} className={stat.key === 'overdue' ? 'col-span-2 lg:col-span-1' : undefined}>
+              <CardContent className="p-4 sm:p-5">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-slate-500">{stat.label}</p>
@@ -174,71 +344,103 @@ export default async function DashboardPage() {
           ))}
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>My Assigned Trainings</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {assignmentsWithProgress.length === 0 ? (
-              <div className="text-center py-12">
-                <BookOpen className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 font-medium">No trainings assigned yet</p>
-                <p className="text-slate-400 text-sm mt-1">Your manager will assign trainings to you</p>
-              </div>
-            ) : (
+        {/* Learning journeys in progress */}
+        {userPaths.length > 0 && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Route className="h-5 w-5 text-blue-600" /> {t.dashboard.myLearningJourneys}
+              </CardTitle>
+              <Link href="/paths" className="text-sm text-blue-600 hover:underline">{t.dashboard.viewRoadmaps}</Link>
+            </CardHeader>
+            <CardContent>
               <div className="space-y-3">
-                {assignmentsWithProgress.map((a) => (
+                {userPaths.slice(0, 3).map(p => (
                   <Link
-                    key={a.id}
-                    href={`/training/${a.module_id}`}
-                    className={cn(
-                      'flex items-center gap-4 p-4 rounded-xl border transition-all group',
-                      a.module?.auto_assign_all
-                        ? 'border-amber-300 ring-1 ring-amber-300 bg-amber-50/40 hover:bg-amber-50'
-                        : 'border-slate-200 hover:border-blue-200 hover:bg-blue-50/30'
-                    )}
+                    key={p.path.id}
+                    href="/paths"
+                    className="block rounded-xl border border-slate-200 p-4 hover:border-blue-200 hover:bg-blue-50/30 transition-all"
                   >
-                    <div
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white font-bold text-lg"
-                      style={{ backgroundColor: getCategoryColor(a.module?.category ?? '') }}
-                    >
-                      {a.module?.title.charAt(0)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">
-                          {a.module?.title}
-                        </p>
-                        {a.module?.auto_assign_all && (
-                          <Badge className="bg-amber-400 text-amber-950 flex items-center gap-1">
-                            <Star className="h-3 w-3 fill-current" /> Required
-                          </Badge>
+                    <div className="flex items-center gap-4">
+                      <ProgressRing percent={p.percent} size={52} stroke={5} />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-semibold text-slate-900 truncate">
+                            {p.path.kind === 'onboarding' && (
+                              <span className="mr-2 text-xs font-semibold uppercase tracking-wide text-blue-700">Onboarding</span>
+                            )}
+                            {p.path.title}
+                          </p>
+                          <span className="text-xs text-slate-500 shrink-0">{p.completedSteps}/{p.steps.length} {t.dashboard.steps}</span>
+                        </div>
+                        <div className="overflow-x-auto py-1">
+                          <JourneyDots steps={p.steps} />
+                        </div>
+                        {p.nextStep && (
+                          <p className="text-sm text-slate-500 truncate">{t.dashboard.next}: {p.nextStep.module.title}</p>
                         )}
-                        <Badge variant={a.percent === 100 ? 'success' : a.percent > 0 ? 'warning' : 'outline'}>
-                          {a.percent === 100 ? 'Complete' : a.percent > 0 ? 'In Progress' : 'Not Started'}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-slate-500 mt-0.5">
-                        {getCategoryLabel(a.module?.category ?? '')} · {a.module?.estimated_minutes} min
-                        {a.due_date && ` · Due ${formatDate(a.due_date)}`}
-                      </p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Progress value={a.percent} className="flex-1 h-1.5" />
-                        <span className="text-xs text-slate-500 shrink-0">{a.percent}%</span>
                       </div>
                     </div>
                   </Link>
                 ))}
               </div>
-            )}
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{t.dashboard.myAssignedTrainings}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AssignedTrainings trainings={dashboardTrainings} t={t} />
           </CardContent>
         </Card>
+
+        {/* Recommended for you */}
+        {recommended.length > 0 && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Lightbulb className="h-5 w-5 text-amber-500" /> {t.dashboard.recommendedForYou}
+              </CardTitle>
+              <Link href="/training" className="text-sm text-blue-600 hover:underline">{t.dashboard.browseAllCourses}</Link>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {recommended.map(m => (
+                  <Link
+                    key={m.id}
+                    href={`/training/${m.id}`}
+                    className="flex items-start gap-3 p-4 rounded-xl border border-slate-200 hover:border-blue-200 hover:bg-blue-50/30 transition-all group"
+                  >
+                    <div
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white font-bold"
+                      style={{ backgroundColor: getCategoryColor(m.category) }}
+                    >
+                      {m.title.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">{m.title}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {getCategoryLabel(m.category)} · {m.estimated_minutes} min
+                      </p>
+                      {m.description && (
+                        <p className="text-sm text-slate-500 line-clamp-2 mt-1">{m.description}</p>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Score summary */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>My Score Summary</CardTitle>
-            <Link href="/score-summary" className="text-sm text-blue-600 hover:underline">View full history</Link>
+            <CardTitle>{t.dashboard.myScoreSummary}</CardTitle>
+            <Link href="/score-summary" className="text-sm text-blue-600 hover:underline">{t.dashboard.viewFullHistory}</Link>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -247,7 +449,7 @@ export default async function DashboardPage() {
                   <Target className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Average Score</p>
+                  <p className="text-xs text-slate-500">{t.dashboard.averageScore}</p>
                   <p className="text-xl font-bold text-slate-900">{avgScore !== null ? `${avgScore}%` : '—'}</p>
                 </div>
               </div>
@@ -256,7 +458,7 @@ export default async function DashboardPage() {
                   <Award className="h-5 w-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Certificates Earned</p>
+                  <p className="text-xs text-slate-500">{t.dashboard.certificatesEarned}</p>
                   <p className="text-xl font-bold text-slate-900">{myCertificates?.length ?? 0}</p>
                 </div>
               </div>
@@ -265,7 +467,7 @@ export default async function DashboardPage() {
                   <TrendingUp className="h-5 w-5 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">Quiz Attempts</p>
+                  <p className="text-xs text-slate-500">{t.dashboard.quizAttempts}</p>
                   <p className="text-xl font-bold text-slate-900">{quizAttempts?.length ?? 0}</p>
                 </div>
               </div>
@@ -276,18 +478,50 @@ export default async function DashboardPage() {
         {/* My certificates */}
         <Card>
           <CardHeader>
-            <CardTitle>My Certificates</CardTitle>
+            <CardTitle>{t.dashboard.myCertificates}</CardTitle>
           </CardHeader>
           <CardContent>
-            {!myCertificates || myCertificates.length === 0 ? (
+            {(!myCertificates || myCertificates.length === 0) && journeyCerts.length === 0 ? (
               <div className="text-center py-10">
                 <Award className="h-10 w-10 text-slate-300 mx-auto mb-2" />
-                <p className="text-slate-500 font-medium text-sm">No certificates yet</p>
-                <p className="text-slate-400 text-xs mt-1">Complete a training to earn one automatically.</p>
+                <p className="text-slate-500 font-medium text-sm">{t.dashboard.noCertificatesYet}</p>
+                <p className="text-slate-400 text-xs mt-1">{t.dashboard.noCertificatesBody}</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {myCertificates.map(cert => (
+                {journeyCerts.map(jc => (
+                  <div key={jc.id} className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+                    <div className="h-9 w-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                      <Award className="h-4 w-4 text-amber-700" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-900 text-sm truncate">
+                        {jc.journey_title}
+                        <span className="ml-2 rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">{t.dashboard.journey}</span>
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {t.dashboard.issued} {formatDate(jc.issued_at)} · {fmt(t.dashboard.allCoursesCompleted, { count: jc.courses_count })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <CertificatePreviewButton
+                        href={`/api/certificate?journeyCertificateId=${jc.id}`}
+                        label={t.common.preview}
+                        downloadLabel={t.common.download}
+                        className="text-sm"
+                      />
+                      <a
+                        href={`/api/certificate?journeyCertificateId=${jc.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+                      >
+                        <Download className="h-3.5 w-3.5" /> {t.common.download}
+                      </a>
+                    </div>
+                  </div>
+                ))}
+                {(myCertificates ?? []).map(cert => (
                   <div key={cert.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
                     <div className="h-9 w-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
                       <Award className="h-4 w-4 text-green-600" />
@@ -295,18 +529,26 @@ export default async function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-slate-900 text-sm truncate">{cert.module_title}</p>
                       <p className="text-xs text-slate-400">
-                        Issued {formatDate(cert.issued_at)}
-                        {cert.max_score ? ` · Score: ${cert.score}/${cert.max_score}` : ''}
+                        {t.dashboard.issued} {formatDate(cert.issued_at)}
+                        {cert.max_score ? ` · ${t.history.score}: ${cert.score}/${cert.max_score}` : ''}
                       </p>
                     </div>
-                    <a
-                      href={`/api/certificate?certificateId=${cert.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline shrink-0"
-                    >
-                      <Download className="h-3.5 w-3.5" /> Download
-                    </a>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <CertificatePreviewButton
+                        href={`/api/certificate?certificateId=${cert.id}`}
+                        label={t.common.preview}
+                        downloadLabel={t.common.download}
+                        className="text-sm"
+                      />
+                      <a
+                        href={`/api/certificate?certificateId=${cert.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+                      >
+                        <Download className="h-3.5 w-3.5" /> {t.common.download}
+                      </a>
+                    </div>
                   </div>
                 ))}
               </div>

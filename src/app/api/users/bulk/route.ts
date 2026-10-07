@@ -18,6 +18,7 @@ interface Row {
   company?: string
   department?: string
   manager_email?: string
+  job_role?: string
 }
 
 export async function POST(req: NextRequest) {
@@ -41,6 +42,11 @@ export async function POST(req: NextRequest) {
   const { data: existingProfiles } = await admin.from('profiles').select('id, email')
   const emailToId = new Map((existingProfiles ?? []).map(p => [p.email.toLowerCase(), p.id]))
 
+  // Job roles are matched by name (case-insensitive); unknown ones are created
+  // so the Users section stays the single place roles come from.
+  const { data: roleRows } = await admin.from('job_roles').select('id, name')
+  const roleByName = new Map((roleRows ?? []).map(r => [r.name.toLowerCase(), r.id as string]))
+
   const results: { email: string; success: boolean; error?: string }[] = []
 
   for (const row of users) {
@@ -59,6 +65,19 @@ export async function POST(req: NextRequest) {
     if (emailToId.has(email)) {
       results.push({ email, success: false, error: 'User already exists' })
       continue
+    }
+
+    const jobRoleName = (row.job_role ?? '').trim()
+    let job_role_id: string | null = null
+    if (jobRoleName) {
+      job_role_id = roleByName.get(jobRoleName.toLowerCase()) ?? null
+      if (!job_role_id) {
+        const { data: created } = await admin.from('job_roles').insert({ name: jobRoleName }).select('id').single()
+        if (created) {
+          job_role_id = created.id as string
+          roleByName.set(jobRoleName.toLowerCase(), job_role_id)
+        }
+      }
     }
 
     const password = generatePassword()
@@ -82,6 +101,7 @@ export async function POST(req: NextRequest) {
       company,
       department,
       manager_id,
+      ...(job_role_id ? { job_role_id } : {}),
     })
 
     if (profileError) {

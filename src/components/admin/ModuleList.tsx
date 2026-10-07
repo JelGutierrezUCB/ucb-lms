@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Plus, Pencil, Trash2, Eye, EyeOff, BookOpen, Clock, UserPlus } from 'lucide-react'
+import { Plus, Pencil, Trash2, Eye, EyeOff, BookOpen, Clock, UserPlus, Archive, ArchiveRestore, ChevronDown, ChevronUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { getCategoryColor, getCategoryLabel, formatDate } from '@/lib/utils'
+import { isProtectedModule } from '@/lib/protected-modules'
 import { AssignModuleDialog } from './AssignModuleDialog'
 import type { Module } from '@/types'
 
@@ -25,7 +26,11 @@ export function ModuleList({ initialModules }: { initialModules: Module[] }) {
   const [deleteModule, setDeleteModule] = useState<Module | null>(null)
   const [assigningModule, setAssigningModule] = useState<Module | null>(null)
   const [loading, setLoading] = useState(false)
+  const [archivedExpanded, setArchivedExpanded] = useState(false)
   const supabase = createClient()
+
+  const activeModules = modules.filter(m => !m.is_archived)
+  const archivedModules = modules.filter(m => m.is_archived)
 
   const handleTogglePublish = async (mod: Module) => {
     const { data, error } = await supabase
@@ -38,6 +43,36 @@ export function ModuleList({ initialModules }: { initialModules: Module[] }) {
     if (error) { toast.error(error.message); return }
     setModules(prev => prev.map(m => m.id === mod.id ? data : m))
     toast.success(data.is_published ? 'Module published' : 'Module unpublished')
+  }
+
+  // Archiving retires a course from active use: it drops out of the catalog,
+  // assignment rules, and journey builder (forcing it unpublished covers all
+  // of those at once), but its content, history, and certificates stay put —
+  // unlike Delete, this is fully reversible.
+  const handleArchive = async (mod: Module) => {
+    const { data, error } = await supabase
+      .from('modules')
+      .update({ is_archived: true, is_published: false })
+      .eq('id', mod.id)
+      .select()
+      .single()
+
+    if (error) { toast.error(error.message); return }
+    setModules(prev => prev.map(m => m.id === mod.id ? data : m))
+    toast.success('Module archived')
+  }
+
+  const handleRestore = async (mod: Module) => {
+    const { data, error } = await supabase
+      .from('modules')
+      .update({ is_archived: false })
+      .eq('id', mod.id)
+      .select()
+      .single()
+
+    if (error) { toast.error(error.message); return }
+    setModules(prev => prev.map(m => m.id === mod.id ? data : m))
+    toast.success('Module restored — republish it when it\'s ready for employees')
   }
 
   const handleDelete = async () => {
@@ -56,7 +91,7 @@ export function ModuleList({ initialModules }: { initialModules: Module[] }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-slate-600">{modules.length} module{modules.length !== 1 ? 's' : ''} total</p>
+        <p className="text-slate-600">{activeModules.length} module{activeModules.length !== 1 ? 's' : ''} total</p>
         <Link href="/admin/modules/new">
           <Button>
             <Plus className="h-4 w-4 mr-2" />
@@ -65,7 +100,7 @@ export function ModuleList({ initialModules }: { initialModules: Module[] }) {
         </Link>
       </div>
 
-      {modules.length === 0 ? (
+      {activeModules.length === 0 ? (
         <Card>
           <div className="text-center py-16">
             <BookOpen className="h-12 w-12 text-slate-300 mx-auto mb-3" />
@@ -78,7 +113,7 @@ export function ModuleList({ initialModules }: { initialModules: Module[] }) {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {modules.map(mod => (
+          {activeModules.map(mod => (
             <Card key={mod.id} className="flex flex-col">
               {/* Color bar */}
               <div
@@ -152,11 +187,23 @@ export function ModuleList({ initialModules }: { initialModules: Module[] }) {
                       {mod.is_published ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                       {mod.is_published ? 'Unpublish' : 'Publish'}
                     </Button>
+                    {!isProtectedModule(mod.id) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleArchive(mod)}
+                        title="Archive — hides it from employees and admin pickers, keeps its content and history, restorable anytime"
+                        className="gap-1.5 ml-auto"
+                      >
+                        <Archive className="h-3.5 w-3.5" />
+                        Archive
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setDeleteModule(mod)}
-                      className="gap-1.5 ml-auto text-red-500 border-red-200 hover:text-red-600 hover:bg-red-50"
+                      className={`gap-1.5 text-red-500 border-red-200 hover:text-red-600 hover:bg-red-50 ${isProtectedModule(mod.id) ? 'ml-auto' : ''}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       Remove Module
@@ -166,6 +213,66 @@ export function ModuleList({ initialModules }: { initialModules: Module[] }) {
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {archivedModules.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50">
+          <button
+            type="button"
+            onClick={() => setArchivedExpanded(o => !o)}
+            className="w-full flex items-center gap-2 px-5 py-3.5 text-left"
+          >
+            <Archive className="h-5 w-5 text-slate-400 shrink-0" />
+            <span className="flex-1 font-medium text-slate-700">
+              Archived Courses ({archivedModules.length})
+            </span>
+            {archivedExpanded ? (
+              <ChevronUp className="h-4 w-4 text-slate-400" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-slate-400" />
+            )}
+          </button>
+          {archivedExpanded && (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 px-5 pb-5">
+              {archivedModules.map(mod => (
+                <Card key={mod.id} className="flex flex-col opacity-80">
+                  <div className="h-2 rounded-t-xl bg-slate-300" />
+                  <div className="flex flex-col flex-1 p-5">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-slate-900 truncate">{mod.title}</p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <Badge
+                          style={{ backgroundColor: `${getCategoryColor(mod.category)}20`, color: getCategoryColor(mod.category) }}
+                        >
+                          {getCategoryLabel(mod.category)}
+                        </Badge>
+                        <Badge variant="outline">Archived</Badge>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-slate-200 flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRestore(mod)}
+                        className="gap-1.5 flex-1"
+                      >
+                        <ArchiveRestore className="h-3.5 w-3.5" /> Restore
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDeleteModule(mod)}
+                        className="gap-1.5 text-red-500 border-red-200 hover:text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

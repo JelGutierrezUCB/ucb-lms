@@ -2,6 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { TrainingPlayer } from '@/components/training/TrainingPlayer'
+import { getProxyTarget } from '@/lib/proxy'
 import type { Module, Section, ContentBlock } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -40,6 +41,13 @@ export default async function TrainingModulePage({
     ) {
       effectiveUserId = targetProfile.id
       proxyName = targetProfile.full_name
+    }
+  } else {
+    // No explicit ?as= — fall back to an active "view this person's portal" session.
+    const proxyTarget = await getProxyTarget(user.id, currentProfile?.role)
+    if (proxyTarget) {
+      effectiveUserId = proxyTarget.id
+      proxyName = proxyTarget.full_name
     }
   }
 

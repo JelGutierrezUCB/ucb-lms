@@ -6,20 +6,7 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 // See https://resend.com/domains
 const FROM = process.env.RESEND_FROM_EMAIL ?? 'UCB Training <onboarding@resend.dev>'
 
-// Calendar invites need an ORGANIZER that matches who actually sent the
-// email, so RSVPs come back to a real inbox.
-export function getSender(): { email: string; name: string } {
-  const m = FROM.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/)
-  return m ? { name: m[1].trim() || 'UCB Training', email: m[2].trim() } : { name: 'UCB Training', email: FROM.trim() }
-}
-
-export interface EmailAttachment {
-  filename: string
-  content: string | Buffer
-  contentType?: string
-}
-
-export async function sendEmail(opts: { to: string; subject: string; html: string; attachments?: EmailAttachment[] }) {
+export async function sendEmail(opts: { to: string; subject: string; html: string }) {
   if (!resend) {
     console.warn('RESEND_API_KEY not set — skipping email send:', opts.subject, 'to', opts.to)
     return { skipped: true }
@@ -30,7 +17,6 @@ export async function sendEmail(opts: { to: string; subject: string; html: strin
       to: opts.to,
       subject: opts.subject,
       html: opts.html,
-      ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
     })
     if (error) console.error('Email send failed:', error)
     return { skipped: false, error }
@@ -58,7 +44,7 @@ export function welcomeEmailHtml(opts: { fullName: string; email: string; passwo
       <p style="margin: 4px 0; color: #1e293b;"><strong>Email:</strong> ${opts.email}</p>
       <p style="margin: 4px 0; color: #1e293b;"><strong>Temporary password:</strong> ${opts.password}</p>
     </div>
-    <a href="${opts.loginUrl}" style="display: inline-block; background: #1e40af; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">Log In</a>
+    <a href="${opts.loginUrl}" style="display: inline-block; background: #281D73; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">Log In</a>
   `)
 }
 
@@ -69,7 +55,7 @@ export function passwordChangedEmailHtml(opts: { fullName: string; password: str
     <div style="background: #f8fafc; border-radius: 8px; padding: 16px; margin: 16px 0;">
       <p style="margin: 4px 0; color: #1e293b;"><strong>New password:</strong> ${opts.password}</p>
     </div>
-    <a href="${opts.loginUrl}" style="display: inline-block; background: #1e40af; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">Log In</a>
+    <a href="${opts.loginUrl}" style="display: inline-block; background: #281D73; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">Log In</a>
     <p style="color: #94a3b8; font-size: 13px; margin-top: 16px;">If you didn't expect this, contact your admin.</p>
   `)
 }
@@ -78,6 +64,6 @@ export function notificationEmailHtml(opts: { fullName: string; title: string; m
   return wrapper(opts.title, `
     <p style="color: #475569; line-height: 1.6;">Hi ${opts.fullName},</p>
     <p style="color: #475569; line-height: 1.6;">${opts.message}</p>
-    <a href="${opts.link}" style="display: inline-block; background: #1e40af; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">View in Training Portal</a>
+    <a href="${opts.link}" style="display: inline-block; background: #281D73; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: 500;">View in Training Portal</a>
   `)
 }

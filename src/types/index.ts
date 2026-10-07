@@ -1,11 +1,5 @@
 export type Role = 'admin' | 'manager' | 'employee'
 
-// Introductory-review scheduling: which holiday calendar applies to someone,
-// and when they're available for calls (in their own timezone).
-export type HolidayRegion = 'US' | 'PH'
-export type DayKey = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'
-export type WorkSchedule = Partial<Record<DayKey, { start: string; end: string } | null>>
-
 export interface Profile {
   id: string
   email: string
@@ -15,11 +9,7 @@ export interface Profile {
   department: string | null
   company: string | null
   avatar_url?: string | null
-  start_date?: string | null // "First Day" — drives the introductory review schedule
-  job_title?: string | null
-  timezone?: string | null // IANA name, e.g. "America/Chicago", "Asia/Manila"
-  holiday_region?: HolidayRegion | null
-  work_schedule?: WorkSchedule | null
+  job_role_id?: string | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -44,6 +34,9 @@ export interface Module {
   category: string
   thumbnail_color: string
   is_published: boolean
+  // Retired from active use — hidden from the catalog, assignment rules, and
+  // journey builder, but its content/history/certificates stay intact.
+  is_archived: boolean
   created_by: string | null
   estimated_minutes: number
   auto_assign_all: boolean
@@ -130,21 +123,32 @@ export interface VideoContent {
   duration_seconds?: number // captured from the file's own metadata on upload; not available for YouTube links
 }
 
-export type QuestionType = 'multiple_choice' | 'long_answer'
+export type QuestionType = 'multiple_choice' | 'multiple_answer' | 'true_false' | 'long_answer'
 
 export interface QuizQuestion {
   id: string
   type?: QuestionType // defaults to 'multiple_choice' when absent, for backward compatibility
   question: string
-  // multiple_choice only:
+  // Optional image shown above the question (e.g. "identify the hazard").
+  image_url?: string | null
+  // multiple_choice / true_false: options + single correct_index.
+  // true_false always has options ['True', 'False'].
   options: string[]
   correct_index: number
+  // multiple_answer only: every one of these indexes must be selected, and
+  // nothing else, to earn credit. correct_index is unused for this type.
+  correct_indexes?: number[]
   explanation?: string
 }
 
 export interface QuizContent {
   questions: QuizQuestion[]
   passing_score: number
+  // Question-bank behavior: when set and smaller than questions.length, each
+  // attempt draws this many questions at random from the full list.
+  draw_count?: number | null
+  // Shuffle question order (after any draw_count subsetting) on every attempt.
+  randomize_order?: boolean
 }
 
 export type BlockContent = TextContent | VideoContent | QuizContent | SlidesContent | DocumentContent
@@ -167,6 +171,10 @@ export interface Assignment {
   assigned_by: string
   assigned_at: string
   due_date: string | null
+  // false = optional training: shown to the person but never counts as overdue
+  required?: boolean
+  // the assignment rule that created this assignment, if any
+  source_rule_id?: string | null
   module?: Module
   section?: Section
   user?: Profile
@@ -221,10 +229,175 @@ export interface ModuleWithProgress extends Module {
   is_assigned?: boolean
 }
 
+// Colors are restricted to the brand palette (navy, green, brown, orange).
 export const MODULE_CATEGORIES = [
-  { value: 'onboarding', label: 'Onboarding', color: '#7c3aed' },
-  { value: 'sales', label: 'Sales', color: '#0891b2' },
-  { value: 'warehouse', label: 'Warehouse', color: '#b45309' },
-  { value: 'ucbzerowaste', label: 'UCBZeroWaste', color: '#15803d' },
-  { value: 'general', label: 'General', color: '#1e40af' },
+  { value: 'onboarding', label: 'Onboarding', color: '#281D73' },
+  { value: 'sales', label: 'Sales', color: '#E25820' },
+  { value: 'warehouse', label: 'Warehouse', color: '#714F36' },
+  { value: 'ucbzerowaste', label: 'UCBZeroWaste', color: '#609D3B' },
+  { value: 'general', label: 'General', color: '#281D73' },
 ] as const
+
+export interface JobRole {
+  id: string
+  name: string
+  description: string | null
+  created_at: string
+}
+
+// Skills & competency system: Employee -> Job Role -> Skills -> Training ->
+// Assessment -> Learning Path.
+export const SKILL_PROFICIENCY_LEVELS = [
+  { value: 1, label: 'Novice' },
+  { value: 2, label: 'Beginner' },
+  { value: 3, label: 'Competent' },
+  { value: 4, label: 'Proficient' },
+  { value: 5, label: 'Expert' },
+] as const
+
+export interface Skill {
+  id: string
+  name: string
+  category: string | null
+  description: string | null
+  created_by: string | null
+  created_at: string
+}
+
+// Required proficiency level for a skill within a job role.
+export interface JobRoleSkill {
+  job_role_id: string
+  skill_id: string
+  required_level: number
+}
+
+// A skill a training module builds — used to recommend training for a gap.
+export interface ModuleSkill {
+  module_id: string
+  skill_id: string
+}
+
+export type SkillAssessmentSource = 'self' | 'supervisor'
+
+// One point-in-time proficiency assessment. The *current* level for a
+// person+skill is their most recent row — an append-only history doubles as
+// the "tracked over time" record with no separate table needed.
+export interface EmployeeSkillAssessment {
+  id: string
+  user_id: string
+  skill_id: string
+  proficiency_level: number
+  source: SkillAssessmentSource
+  assessed_by: string | null
+  assessed_at: string
+  notes: string | null
+}
+
+export type LearningPathKind = 'learning' | 'onboarding'
+
+export interface LearningPath {
+  id: string
+  title: string
+  description: string | null
+  kind: LearningPathKind
+  job_role_id: string | null
+  auto_enroll_new_hires: boolean
+  is_published: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface LearningPathItem {
+  id: string
+  path_id: string
+  module_id: string
+  order_index: number
+  // Optional roadmap details: a signpost label shown where a new phase starts
+  // (e.g. "Listen and Learn"), and a short note shown beside the course.
+  phase?: string | null
+  note?: string | null
+  module?: Module
+}
+
+export interface LearningPathEnrollment {
+  id: string
+  path_id: string
+  user_id: string
+  assigned_by: string | null
+  assigned_at: string
+  due_date: string | null
+  source: 'manual' | 'role' | 'audience' | 'new_hire'
+}
+
+// One audience filter on a path. A person is enrolled automatically when, for
+// every kind the path has filters for, they hold one of the chosen values:
+//   company / department -> the name as stored on the user record
+//   job_role             -> a job_roles.id
+//   supervisor           -> the manager's profile id (their direct reports)
+//   account_role         -> 'employee' | 'manager' | 'admin'
+// (learning_paths.job_role_id is the old single-role column and is unused.)
+export type LearningPathTargetKind = 'company' | 'department' | 'job_role' | 'supervisor' | 'account_role'
+
+export interface LearningPathTarget {
+  path_id: string
+  kind: LearningPathTargetKind
+  value: string
+}
+
+// A named grouping of courses for browsing/reporting (e.g. "Leadership
+// Development") — unlike a learning path, a program has no order and no
+// auto-enrollment; a course can belong to more than one program.
+export interface Program {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ProgramModule {
+  program_id: string
+  module_id: string
+  added_at: string
+}
+
+// Issued automatically when someone has earned the certificate for every
+// course in a journey they're enrolled in.
+export interface JourneyCertificate {
+  id: string
+  path_id: string | null
+  user_id: string
+  employee_name: string
+  company: string | null
+  journey_title: string
+  courses_count: number
+  completed_at: string
+  issued_at: string
+}
+
+// An assignment rule: one course + an audience + required/optional + a due
+// date policy. People who match are assigned the course automatically.
+export type CourseRuleTargetKind = 'company' | 'department' | 'job_role' | 'supervisor' | 'account_role' | 'person'
+
+export interface CourseRule {
+  id: string
+  module_id: string
+  requirement: 'required' | 'optional'
+  due_mode: 'none' | 'fixed' | 'relative'
+  due_date: string | null // fixed date, when due_mode = 'fixed'
+  due_days: number | null // days after assignment, when due_mode = 'relative'
+  auto_enroll_new_hires: boolean
+  is_active: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CourseRuleTarget {
+  rule_id: string
+  kind: CourseRuleTargetKind
+  value: string
+}

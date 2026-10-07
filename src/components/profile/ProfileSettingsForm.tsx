@@ -2,8 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Loader2, Upload, User, Save, KeyRound, Clock } from 'lucide-react'
-import { WorkScheduleFields, saveScheduleValues, valuesFromProfile, type ScheduleValues } from '@/components/reviews/WorkScheduleFields'
+import { Loader2, Upload, User, Save, KeyRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
@@ -27,19 +26,6 @@ export function ProfileSettingsForm({ profile }: { profile: Profile }) {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [savingPassword, setSavingPassword] = useState(false)
-
-  const [schedule, setSchedule] = useState<ScheduleValues>(() => valuesFromProfile(profile))
-  const [savingSchedule, setSavingSchedule] = useState(false)
-
-  const handleSaveSchedule = async () => {
-    if (!schedule.timezone) { toast.error('Choose your timezone first'); return }
-    setSavingSchedule(true)
-    const err = await saveScheduleValues(supabase, profile.id, schedule)
-    setSavingSchedule(false)
-    if (err) { toast.error(err); return }
-    toast.success('Schedule saved')
-    refreshProfile()
-  }
 
   const handleSaveName = async () => {
     if (!fullName.trim()) { toast.error('Name cannot be empty'); return }
@@ -151,22 +137,6 @@ export function ProfileSettingsForm({ profile }: { profile: Profile }) {
           </div>
           <Button onClick={handleSaveName} loading={savingName} disabled={fullName.trim() === profile.full_name}>
             <Save className="h-4 w-4 mr-2" /> Save Name
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Work schedule — used to find review-call times that suit everyone */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Clock className="h-4 w-4 text-slate-400" /> Time Zone & Working Hours</CardTitle>
-          <p className="text-sm text-slate-500">
-            Used when scheduling calls (like introductory reviews), so you’re only offered times inside your working hours.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <WorkScheduleFields value={schedule} onChange={setSchedule} />
-          <Button onClick={handleSaveSchedule} loading={savingSchedule} disabled={!schedule.timezone}>
-            <Save className="h-4 w-4 mr-2" /> Save Schedule
           </Button>
         </CardContent>
       </Card>

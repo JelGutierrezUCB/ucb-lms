@@ -1,9 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Search, Pencil, Trash2, UserX, UserCheck, EyeOff, Eye, Upload, KeyRound } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Plus, Search, Pencil, Trash2, UserX, UserCheck, EyeOff, Eye, Upload, KeyRound, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { useProxy } from '@/contexts/ProxyContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -18,7 +20,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { Profile, Role } from '@/types'
+import type { JobRole, Profile, Role } from '@/types'
 import { COMPANIES, COMPANY_DEPARTMENTS } from '@/types'
 import { getRoleLabel, formatDate } from '@/lib/utils'
 import { CsvImportDialog } from './CsvImportDialog'
@@ -28,13 +30,22 @@ interface Props {
   initialProfiles: Profile[]
   currentUserRole: string
   currentUserId: string
+  // Empty until the learning-paths migration is applied and roles are created;
+  // the Job Role field is hidden (and never sent) while it's empty.
+  jobRoles?: JobRole[]
 }
 
 const roleBadgeVariant = (role: string) =>
   role === 'admin' ? 'default' : role === 'manager' ? 'warning' : 'outline'
 
-export function UserManagement({ initialProfiles, currentUserRole, currentUserId }: Props) {
+export function UserManagement({ initialProfiles, currentUserRole, currentUserId, jobRoles = [] }: Props) {
+  const router = useRouter()
+  const { startProxy } = useProxy()
   const [profiles, setProfiles] = useState(initialProfiles)
+  // Job roles are created here, on the user form; Journey Builder just reads them.
+  const [roles, setRoles] = useState<JobRole[]>(jobRoles)
+  const [newRole, setNewRole] = useState('')
+  const [addingRole, setAddingRole] = useState(false)
   const [search, setSearch] = useState('')
   const [filterCompany, setFilterCompany] = useState('all')
   const [filterDepartment, setFilterDepartment] = useState('all')
@@ -55,6 +66,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
     company: '',
     department: '',
     manager_id: '',
+    job_role_id: '',
     is_active: true,
   })
 
@@ -79,8 +91,24 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
   const inactiveCount = profiles.filter(p => p.is_active === false).length
 
   const resetForm = () => setForm({
-    full_name: '', email: '', password: '', role: 'employee', company: '', department: '', manager_id: '', is_active: true,
+    full_name: '', email: '', password: '', role: 'employee', company: '', department: '', manager_id: '', job_role_id: '', is_active: true,
   })
+
+  const addJobRole = async () => {
+    const name = newRole.trim()
+    if (!name) return
+    setAddingRole(true)
+    const { data, error } = await supabase.from('job_roles').insert({ name }).select('*').single()
+    setAddingRole(false)
+    if (error) {
+      toast.error(error.code === '23505' ? 'That job role already exists' : error.message)
+      return
+    }
+    setRoles(prev => [...prev, data as JobRole].sort((a, b) => a.name.localeCompare(b.name)))
+    setForm(f => ({ ...f, job_role_id: (data as JobRole).id }))
+    setNewRole('')
+    toast.success(`Added job role "${name}"`)
+  }
 
   const handleCreate = async () => {
     if (!form.full_name || !form.email || !form.password) {
@@ -121,6 +149,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
           department: form.department || null,
           manager_id: form.manager_id || null,
           is_active: form.is_active,
+          job_role_id: form.job_role_id || null,
         })
         .eq('id', editUser.id)
         .select()
@@ -190,9 +219,19 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
       company: user.company ?? '',
       department: user.department ?? '',
       manager_id: user.manager_id ?? '',
+      job_role_id: user.job_role_id ?? '',
       is_active: user.is_active !== false,
     })
     setEditUser(user)
+  }
+
+  // Opens the person's own learner portal (dashboard, training, journeys,
+  // history) exactly as they see it — mirrors the manager "Start Training"
+  // proxy, just entered from Users instead of the employee list.
+  const handleViewPortal = (user: Profile) => {
+    startProxy(user)
+    toast.success(`Viewing ${user.full_name}'s portal`)
+    router.push('/dashboard')
   }
 
   return (
@@ -268,7 +307,8 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Name</th>
-                <th className="text-left px-4 py-3 text-slate-600 font-medium">Role</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Account type</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">Job role</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Company</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Department</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Manager</th>
@@ -281,7 +321,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-10 text-slate-400">No users found</td>
+                  <td colSpan={8} className="text-center py-10 text-slate-400">No users found</td>
                 </tr>
               ) : (
                 filtered.map(user => {
@@ -305,6 +345,7 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                       <td className="px-4 py-3">
                         <Badge variant={roleBadgeVariant(user.role)}>{getRoleLabel(user.role)}</Badge>
                       </td>
+                      <td className="px-4 py-3 text-slate-600">{roles.find(r => r.id === user.job_role_id)?.name ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{user.company ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{user.department ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{manager?.full_name ?? '—'}</td>
@@ -312,6 +353,15 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                       {currentUserRole === 'admin' && (
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
+                            {user.id !== currentUserId && user.role !== 'admin' && user.is_active !== false && (
+                              <button
+                                onClick={() => handleViewPortal(user)}
+                                className="p-1.5 rounded text-slate-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+                                title="View this person's portal"
+                              >
+                                <LogIn className="h-4 w-4" />
+                              </button>
+                            )}
                             <button
                               onClick={() => openEdit(user)}
                               className="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
@@ -451,23 +501,49 @@ export function UserManagement({ initialProfiles, currentUserRole, currentUserId
                 </SelectContent>
               </Select>
             </div>
-            {form.role === 'employee' && (
-              <div className="space-y-1.5">
-                <Label>Manager (optional)</Label>
-                <Select
-                  value={form.manager_id || '__none__'}
-                  onValueChange={v => setForm(f => ({ ...f, manager_id: v === '__none__' ? '' : v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder="Assign a manager" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No manager</SelectItem>
-                    {managers.map(m => (
-                      <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-1.5">
+              <Label>Job role (optional)</Label>
+              <Select
+                value={form.job_role_id || '__none__'}
+                onValueChange={v => setForm(f => ({ ...f, job_role_id: v === '__none__' ? '' : v }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Select a job role" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No job role</SelectItem>
+                  {roles.map(r => (
+                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex gap-2">
+                <Input
+                  value={newRole}
+                  onChange={e => setNewRole(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addJobRole() } }}
+                  placeholder="Not listed? Type a new job role"
+                  aria-label="New job role"
+                />
+                <Button type="button" variant="outline" onClick={addJobRole} loading={addingRole} className="shrink-0">Add</Button>
               </div>
-            )}
+              <p className="text-xs text-slate-400">
+                Job roles are managed here. Learning journeys use these details (job role, company, department, manager and account type) and enroll matching people automatically.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Manager (optional)</Label>
+              <Select
+                value={form.manager_id || '__none__'}
+                onValueChange={v => setForm(f => ({ ...f, manager_id: v === '__none__' ? '' : v }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Assign a manager" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No manager</SelectItem>
+                  {managers.filter(m => m.id !== editUser?.id).map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {/* Active / Inactive — only show when editing, and not for yourself */}
             {editUser && editUser.id !== currentUserId && (
               <div className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3">

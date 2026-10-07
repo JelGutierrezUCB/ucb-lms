@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Users, BookOpen, GraduationCap, TrendingUp, AlertCircle, CheckCircle2, Clock, Target, Award, Download } from 'lucide-react'
 import Link from 'next/link'
@@ -10,9 +9,8 @@ import { Button } from '@/components/ui/button'
 import { ModuleCompletionList } from '@/components/admin/ModuleCompletionList'
 import { AdminActionButtons } from '@/components/admin/AdminActionButtons'
 import { formatDate } from '@/lib/utils'
+import { CertificatePreviewButton } from '@/components/certificates/CertificatePreviewButton'
 import type { Certificate } from '@/types'
-import { ReviewActionCard } from '@/components/reviews/ReviewActionCard'
-import { getReviewActionItems } from '@/lib/introReviews/dashboard'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,8 +21,6 @@ export default async function AdminDashboardPage() {
 
   const { data: profile } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
-
-  const reviewActions = await getReviewActionItems(supabase, user.id, 'admin')
 
   // The admin's own score/certificates — admins can be assigned trainings
   // too (e.g. required-for-everyone modules), so this isn't always empty.
@@ -47,16 +43,11 @@ export default async function AdminDashboardPage() {
     { data: modules },
     { data: assignments },
     { data: sections },
-    { data: recentAttempts },
   ] = await Promise.all([
     supabase.from('profiles').select('id, full_name, role, department, is_active').order('full_name'),
     supabase.from('modules').select('id, title, category, is_published, estimated_minutes'),
     supabase.from('assignments').select('user_id, module_id, assigned_at, due_date'),
     supabase.from('sections').select('id, module_id'),
-    supabase.from('quiz_attempts')
-      .select('user_id, score, max_score, completed_at, content_block_id')
-      .order('completed_at', { ascending: false })
-      .limit(20),
   ])
 
   const employees = (allProfiles ?? []).filter(p => p.role === 'employee' && p.is_active !== false)
@@ -123,38 +114,6 @@ export default async function AdminDashboardPage() {
     return { ...m, assigned: assignedToModule.length, completed: completedForModule, pct }
   }).sort((a, b) => b.assigned - a.assigned)
 
-  // Fetch content_block → section + module mapping via nested join
-  const recentBlockIds = [...new Set((recentAttempts ?? []).map(a => a.content_block_id).filter(Boolean))]
-  const { data: quizBlocks } = recentBlockIds.length
-    ? await supabase
-        .from('content_blocks')
-        .select('id, sections!inner(title, module_id, modules!inner(title))')
-        .in('id', recentBlockIds)
-    : { data: [] }
-  const blockToInfo: Record<string, { moduleTitle: string; sectionTitle: string }> = {}
-  for (const b of (quizBlocks ?? []) as any[]) {
-    if (b.sections?.module_id) {
-      blockToInfo[b.id] = {
-        moduleTitle: b.sections.modules?.title ?? 'Training Quiz',
-        sectionTitle: b.sections.title ?? '',
-      }
-    }
-  }
-
-  // Recent quiz attempts enriched with name + module/section title
-  const recentWithNames = (recentAttempts ?? []).map(a => {
-    const p = (allProfiles ?? []).find(pr => pr.id === a.user_id)
-    const info = blockToInfo[a.content_block_id]
-    return {
-      ...a,
-      name: p?.full_name ?? 'Unknown',
-      department: p?.department ?? '',
-      moduleName: info?.moduleTitle ?? 'Training Quiz',
-      sectionName: info?.sectionTitle ?? '',
-      scorePct: a.max_score > 0 ? Math.round((a.score / a.max_score) * 100) : 0,
-    }
-  })
-
   // Per-module employee breakdown for drilldown (sorted: completed → in-progress → not started)
   const moduleEmployeeBreakdown: Record<string, Array<{
     name: string; dept: string
@@ -191,7 +150,7 @@ export default async function AdminDashboardPage() {
       <main className="flex-1 p-6 space-y-6">
 
         {/* Welcome banner */}
-        <div className="rounded-2xl bg-gradient-to-r from-[#241B4E] to-[#3a2d7a] p-6 text-white flex items-center gap-6">
+        <div className="rounded-2xl bg-gradient-to-r from-[#281D73] to-[#402EB8] p-6 text-white flex items-center gap-6">
           <div className="bg-white rounded-xl p-3 shrink-0">
             <img
               src="/branding/ucb-environmental-logo.png"
@@ -200,13 +159,11 @@ export default async function AdminDashboardPage() {
             />
           </div>
           <div className="border-l border-white/20 pl-6">
-            <p className="text-xs uppercase tracking-widest text-[#7CC24A] font-semibold">UCB Training Portal</p>
+            <p className="text-xs uppercase tracking-widest text-[#E25820] font-semibold">UCB Training Portal</p>
             <h2 className="text-xl font-bold">Welcome back, {profile.full_name?.split(' ')[0] ?? 'Admin'}!</h2>
             <p className="text-sm text-white/70 mt-0.5">Growing greener, one completed training at a time. 🌱</p>
           </div>
         </div>
-
-        <ReviewActionCard items={reviewActions.items} orgOverdue={reviewActions.orgOverdue} />
 
         {/* Top stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -252,59 +209,28 @@ export default async function AdminDashboardPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Module completion breakdown — click any row to see who completed/hasn't */}
-          <Card>
-            <CardHeader className="pb-3">
+        {/* Module completion breakdown — click any row to see who completed/hasn't.
+            Quiz activity (scores, who completed, tries, dates) lives in Reports,
+            broken out per course, rather than cluttering this dashboard. */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Module Completion Rates</CardTitle>
                 <p className="text-xs text-slate-400 mt-0.5">Click a module to see employee breakdown</p>
               </div>
-            </CardHeader>
-            <CardContent>
-              <ModuleCompletionList
-                moduleStats={moduleStats}
-                moduleEmployeeBreakdown={moduleEmployeeBreakdown}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Recent quiz activity */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle>Recent Quiz Activity</CardTitle>
-                <Link href="/reports">
-                  <Button variant="outline" size="sm">View All Reports</Button>
-                </Link>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {recentWithNames.length === 0 ? (
-                <p className="text-slate-400 text-sm text-center py-4">No quiz attempts yet</p>
-              ) : (
-                <div className="space-y-2">
-                  {recentWithNames.map((a, i) => (
-                    <div key={i} className="flex items-center gap-3 py-2 border-b border-slate-100 last:border-0">
-                      <div className="h-8 w-8 rounded-full bg-blue-700 text-white flex items-center justify-center text-xs font-bold shrink-0">
-                        {a.name.charAt(0)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-800 truncate">{a.name}</p>
-                        <p className="text-xs text-slate-400 truncate" title={a.sectionName ? `${a.moduleName} · ${a.sectionName}` : a.moduleName}>
-                          {a.moduleName}{a.sectionName ? ` · ${a.sectionName}` : ''}
-                        </p>
-                      </div>
-                      <Badge variant={a.scorePct >= 70 ? 'success' : 'danger'} className="shrink-0">
-                        {a.scorePct}%
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              <Link href="/reports">
+                <Button variant="outline" size="sm">View All Reports</Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ModuleCompletionList
+              moduleStats={moduleStats}
+              moduleEmployeeBreakdown={moduleEmployeeBreakdown}
+            />
+          </CardContent>
+        </Card>
 
         {/* Location/dept breakdown */}
         {Object.keys(deptMap).length > 0 && (
@@ -376,14 +302,17 @@ export default async function AdminDashboardPage() {
                           <p className="font-medium text-slate-900 text-sm truncate">{cert.module_title}</p>
                           <p className="text-xs text-slate-400">Issued {formatDate(cert.issued_at)}</p>
                         </div>
-                        <a
-                          href={`/api/certificate?certificateId=${cert.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-sm text-blue-600 hover:underline shrink-0"
-                        >
-                          <Download className="h-3.5 w-3.5" /> Download
-                        </a>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <CertificatePreviewButton href={`/api/certificate?certificateId=${cert.id}`} className="text-sm" />
+                          <a
+                            href={`/api/certificate?certificateId=${cert.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                          >
+                            <Download className="h-3.5 w-3.5" /> Download
+                          </a>
+                        </div>
                       </div>
                     ))}
                   </div>
