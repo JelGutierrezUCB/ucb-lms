@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { createClient } from '@/lib/supabase/client'
-import { cn } from '@/lib/utils'
 import type { Profile, Module } from '@/types'
 
 interface Props {
@@ -24,7 +23,6 @@ export function BulkAssignDialog({ employees, modules, currentUserId, onClose }:
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set())
   const [selectedModules, setSelectedModules] = useState<Set<string>>(new Set())
   const [dueDate, setDueDate] = useState('')
-  const [required, setRequired] = useState(true)
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState(false)
 
@@ -85,7 +83,6 @@ export function BulkAssignDialog({ employees, modules, currentUserId, onClose }:
             user_id: userId,
             module_id: moduleId,
             assigned_by: currentUserId,
-            required,
             ...(dueDate ? { due_date: dueDate } : {}),
           })
         }
@@ -97,15 +94,16 @@ export function BulkAssignDialog({ employees, modules, currentUserId, onClose }:
         .upsert(rows, { onConflict: 'user_id,module_id', ignoreDuplicates: true })
       if (error) throw error
 
-      // Refresh due date and required/optional for anyone who already had
-      // these assignments (upsert with ignoreDuplicates skips updating
-      // existing rows).
-      await supabase
-        .from('assignments')
-        .update({ required, ...(dueDate ? { due_date: dueDate } : {}) })
-        .in('user_id', [...selectedEmployees])
-        .in('module_id', [...selectedModules])
-        .is('section_id', null)
+      // Refresh due date for anyone who already had these assignments (upsert
+      // with ignoreDuplicates skips updating existing rows).
+      if (dueDate) {
+        await supabase
+          .from('assignments')
+          .update({ due_date: dueDate })
+          .in('user_id', [...selectedEmployees])
+          .in('module_id', [...selectedModules])
+          .is('section_id', null)
+      }
 
       const userIds = [...selectedEmployees]
       for (const moduleId of selectedModules) {
@@ -172,33 +170,6 @@ export function BulkAssignDialog({ employees, modules, currentUserId, onClose }:
                 Clear
               </button>
             )}
-          </div>
-
-          {/* Required vs optional */}
-          <div className="flex items-center gap-3">
-            <Label className="shrink-0">Requirement</Label>
-            <div className="flex gap-2 rounded-lg bg-slate-100 p-1 w-fit">
-              <button
-                type="button"
-                onClick={() => setRequired(true)}
-                className={cn(
-                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                  required ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'
-                )}
-              >
-                Required
-              </button>
-              <button
-                type="button"
-                onClick={() => setRequired(false)}
-                className={cn(
-                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                  !required ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'
-                )}
-              >
-                Optional
-              </button>
-            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

@@ -44,7 +44,6 @@ export function AssignModuleDialog({ moduleId, moduleTitle, open, onOpenChange, 
   const [assigned, setAssigned] = useState<Set<string>>(new Set())
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [dueDate, setDueDate] = useState('')
-  const [required, setRequired] = useState(true)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -69,7 +68,7 @@ export function AssignModuleDialog({ moduleId, moduleTitle, open, onOpenChange, 
       // All active users — admins and managers can assign trainings to
       // themselves or each other, not just to employees.
       supabase.from('profiles').select('id, full_name, department, email, role').eq('is_active', true).order('full_name'),
-      supabase.from('assignments').select('user_id, section_id, due_date, required').eq('module_id', moduleId),
+      supabase.from('assignments').select('user_id, section_id, due_date').eq('module_id', moduleId),
       supabase.from('sections').select('id, title').eq('module_id', moduleId).order('order_index'),
     ]).then(([empRes, assignRes, sectionsRes]) => {
       if (empRes.error) { toast.error(empRes.error.message); return }
@@ -97,10 +96,6 @@ export function AssignModuleDialog({ moduleId, moduleTitle, open, onOpenChange, 
       // Pre-fill due date if all assigned share the same one
       const dates = [...new Set(rows.map(a => a.due_date).filter(Boolean))]
       setDueDate(dates.length === 1 ? dates[0] : '')
-
-      // Pre-fill required/optional if all assigned share the same one; default required.
-      const requiredVals = [...new Set(rows.map(a => a.required))]
-      setRequired(requiredVals.length === 1 ? requiredVals[0] : true)
     }).finally(() => setLoading(false))
   }, [open, moduleId, preselectSectionId])
 
@@ -189,7 +184,6 @@ export function AssignModuleDialog({ moduleId, moduleTitle, open, onOpenChange, 
             module_id: moduleId,
             section_id: null,
             assigned_by: user.id,
-            required,
             ...(dueDate ? { due_date: dueDate } : {}),
           }))
           const { error: insErr } = await supabase.from('assignments').insert(rows)
@@ -198,15 +192,13 @@ export function AssignModuleDialog({ moduleId, moduleTitle, open, onOpenChange, 
           notifyUserIds.push(...needsUpgrade)
         }
 
-        // Already-full employees who remain selected: refresh due date and required/optional.
-        const alreadyFull = keptSelected.filter(id => moduleLevelAssigned.has(id))
-        if (alreadyFull.length > 0) {
-          const { error } = await supabase
-            .from('assignments')
-            .update({ required, ...(dueDate ? { due_date: dueDate } : {}) })
-            .eq('module_id', moduleId)
-            .in('user_id', alreadyFull)
-          if (error) throw error
+        // Already-full employees who remain selected: just refresh due date.
+        if (dueDate) {
+          const alreadyFull = keptSelected.filter(id => moduleLevelAssigned.has(id))
+          if (alreadyFull.length > 0) {
+            const { error } = await supabase.from('assignments').update({ due_date: dueDate }).eq('module_id', moduleId).in('user_id', alreadyFull)
+            if (error) throw error
+          }
         }
       } else {
         // 'sections' scope — skip anyone who already has the whole module (it already covers everything).
@@ -228,21 +220,15 @@ export function AssignModuleDialog({ moduleId, moduleTitle, open, onOpenChange, 
               module_id: moduleId,
               section_id: sectionId,
               assigned_by: user.id,
-              required,
               ...(dueDate ? { due_date: dueDate } : {}),
             }))
             const { error } = await supabase.from('assignments').insert(rows)
             if (error) throw error
             added += toAddSections.length
             if (toAddSections.length > 0) notifyUserIds.push(userId)
-          } else if (existing.size > 0) {
-            // No new sections, but refresh due date and required/optional on the ones they already have.
-            const { error } = await supabase
-              .from('assignments')
-              .update({ required, ...(dueDate ? { due_date: dueDate } : {}) })
-              .eq('module_id', moduleId)
-              .eq('user_id', userId)
-              .in('section_id', [...existing])
+          } else if (dueDate && existing.size > 0) {
+            // No new sections, but refresh due date on the ones they already have.
+            const { error } = await supabase.from('assignments').update({ due_date: dueDate }).eq('module_id', moduleId).eq('user_id', userId).in('section_id', [...existing])
             if (error) throw error
           }
         }
@@ -386,33 +372,6 @@ export function AssignModuleDialog({ moduleId, moduleTitle, open, onOpenChange, 
                   Clear
                 </button>
               )}
-            </div>
-
-            {/* Required vs optional */}
-            <div className="flex items-center gap-3">
-              <label className="text-sm text-slate-600 shrink-0">Requirement</label>
-              <div className="flex gap-2 rounded-lg bg-slate-100 p-1 w-fit">
-                <button
-                  type="button"
-                  onClick={() => setRequired(true)}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                    required ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'
-                  )}
-                >
-                  Required
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRequired(false)}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                    !required ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'
-                  )}
-                >
-                  Optional
-                </button>
-              </div>
             </div>
 
             {/* Select all + count */}

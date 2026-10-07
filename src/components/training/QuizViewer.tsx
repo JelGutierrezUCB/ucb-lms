@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import type { ContentBlock, QuizContent, QuizQuestion } from '@/types'
+import type { ContentBlock, QuizContent } from '@/types'
 
 interface Props {
   block: ContentBlock
@@ -15,103 +15,63 @@ interface Props {
   onPass: () => void
 }
 
-type Answer = number | string | number[]
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
-}
-
-// Draws the set of questions for one attempt: a random N-of-M subset when the
-// quiz is set up as a question bank (incidentally randomizing their order too),
-// otherwise the full set, shuffled if the quiz asks for randomized order.
-function drawQuestions(content: QuizContent): QuizQuestion[] {
-  const draw = content.draw_count
-  if (draw && draw > 0 && draw < content.questions.length) {
-    return shuffle(content.questions).slice(0, draw)
-  }
-  if (content.randomize_order) {
-    return shuffle(content.questions)
-  }
-  return content.questions
-}
-
-function arraysEqualAsSets(a: number[], b: number[]) {
-  if (a.length !== b.length) return false
-  const sa = [...a].sort()
-  const sb = [...b].sort()
-  return sa.every((v, i) => v === sb[i])
-}
-
 export function QuizViewer({ block, userId, onPass }: Props) {
   const content = block.content as QuizContent
-  const [activeQuestions, setActiveQuestions] = useState<QuizQuestion[]>(() => drawQuestions(content))
-  const [answers, setAnswers] = useState<Record<string, Answer>>({})
+  const [answers, setAnswers] = useState<Record<number, number | string>>({})
   const [submitted, setSubmitted] = useState(false)
   const [score, setScore] = useState(0)
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
-  const totalQ = activeQuestions.length
-  const isAnswered = (q: QuizQuestion) => {
-    const a = answers[q.id]
-    const type = q.type ?? 'multiple_choice'
-    if (type === 'long_answer') return typeof a === 'string' && a.trim().length > 0
-    if (type === 'multiple_answer') return Array.isArray(a) && a.length > 0
-    return a !== undefined
-  }
-  const allAnswered = activeQuestions.every(isAnswered)
-  const answeredQ = activeQuestions.filter(isAnswered).length
+  const totalQ = content.questions.length
+  const allAnswered = content.questions.every((q, qi) => {
+    const a = answers[qi]
+    return (q.type ?? 'multiple_choice') === 'long_answer'
+      ? typeof a === 'string' && a.trim().length > 0
+      : a !== undefined
+  })
+  const answeredQ = content.questions.filter((q, qi) => {
+    const a = answers[qi]
+    return (q.type ?? 'multiple_choice') === 'long_answer'
+      ? typeof a === 'string' && a.trim().length > 0
+      : a !== undefined
+  }).length
 
-  const handleSelect = (qId: string, oi: number) => {
+  const handleSelect = (qi: number, oi: number) => {
     if (submitted) return
-    setAnswers(prev => ({ ...prev, [qId]: oi }))
+    setAnswers(prev => ({ ...prev, [qi]: oi }))
   }
 
-  const handleToggleMulti = (qId: string, oi: number) => {
+  const handleTextChange = (qi: number, value: string) => {
     if (submitted) return
-    setAnswers(prev => {
-      const current = Array.isArray(prev[qId]) ? (prev[qId] as number[]) : []
-      const next = current.includes(oi) ? current.filter(i => i !== oi) : [...current, oi]
-      return { ...prev, [qId]: next }
-    })
-  }
-
-  const handleTextChange = (qId: string, value: string) => {
-    if (submitted) return
-    setAnswers(prev => ({ ...prev, [qId]: value }))
-  }
-
-  const isQuestionCorrect = (q: QuizQuestion) => {
-    const type = q.type ?? 'multiple_choice'
-    const a = answers[q.id]
-    if (type === 'long_answer') return typeof a === 'string' && a.trim().length > 0
-    if (type === 'multiple_answer') return Array.isArray(a) && arraysEqualAsSets(a, q.correct_indexes ?? [])
-    return a === q.correct_index
+    setAnswers(prev => ({ ...prev, [qi]: value }))
   }
 
   const handleSubmit = async () => {
     if (!allAnswered) { toast.error('Please answer all questions'); return }
     setSaving(true)
 
-    const correctCount = activeQuestions.reduce((acc, q) => acc + (isQuestionCorrect(q) ? 1 : 0), 0)
+    // Long-answer questions can't be auto-graded for correctness, so any
+    // answered one (submission already requires every question answered)
+    // automatically earns its point toward the score, same as a correct MC pick.
+    const correctCount = content.questions.reduce((acc, q, qi) => {
+      const isLongAnswer = (q.type ?? 'multiple_choice') === 'long_answer'
+      if (isLongAnswer) {
+        return acc + (typeof answers[qi] === 'string' && answers[qi].trim().length > 0 ? 1 : 0)
+      }
+      return acc + (answers[qi] === q.correct_index ? 1 : 0)
+    }, 0)
     const maxScore = totalQ
     const scorePercent = maxScore > 0 ? Math.round((correctCount / maxScore) * 100) : 100
 
-    // Stored by question id (not position) so review stays accurate even
-    // when the quiz draws a random subset or shuffles order per attempt.
-    const answerRecord = activeQuestions.map(q => ({ id: q.id, answer: answers[q.id] }))
+    const answerArray = content.questions.map((_, qi) => answers[qi])
 
     await supabase.from('quiz_attempts').insert({
       user_id: userId,
       content_block_id: block.id,
       score: correctCount,
       max_score: maxScore,
-      answers: answerRecord,
+      answers: answerArray,
     })
 
     setScore(scorePercent)
@@ -127,7 +87,6 @@ export function QuizViewer({ block, userId, onPass }: Props) {
   }
 
   const handleRetry = () => {
-    setActiveQuestions(drawQuestions(content))
     setAnswers({})
     setSubmitted(false)
     setScore(0)
@@ -137,13 +96,10 @@ export function QuizViewer({ block, userId, onPass }: Props) {
 
   return (
     <div className="rounded-xl border-2 border-blue-100 bg-blue-50/30 p-6 space-y-6">
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2">
         <HelpCircle className="h-5 w-5 text-blue-600" />
         <h3 className="font-semibold text-slate-900">Knowledge Check</h3>
         <span className="text-sm text-slate-500">Passing score: {content.passing_score}%</span>
-        {content.draw_count && content.draw_count > 0 && content.draw_count < content.questions.length && (
-          <span className="text-sm text-slate-400">· {totalQ} of {content.questions.length} questions this attempt</span>
-        )}
       </div>
 
       {submitted && (
@@ -173,13 +129,11 @@ export function QuizViewer({ block, userId, onPass }: Props) {
         </div>
       )}
 
-      {activeQuestions.map((q, qi) => {
-        const type = q.type ?? 'multiple_choice'
-        const isLongAnswer = type === 'long_answer'
-        const isMultiAnswer = type === 'multiple_answer'
-        const selected = answers[q.id]
-        const isCorrect = submitted && !isLongAnswer && isQuestionCorrect(q)
-        const isWrong = submitted && !isLongAnswer && isAnswered(q) && !isQuestionCorrect(q)
+      {content.questions.map((q, qi) => {
+        const isLongAnswer = (q.type ?? 'multiple_choice') === 'long_answer'
+        const selected = answers[qi]
+        const isCorrect = submitted && !isLongAnswer && selected === q.correct_index
+        const isWrong = submitted && !isLongAnswer && selected !== undefined && selected !== q.correct_index
 
         if (isLongAnswer) {
           return (
@@ -187,10 +141,9 @@ export function QuizViewer({ block, userId, onPass }: Props) {
               <p className="font-medium text-slate-900">
                 {qi + 1}. {q.question}
               </p>
-              {q.image_url && <img src={q.image_url} alt="" className="max-h-64 rounded-lg border border-slate-200" />}
               <Textarea
                 value={typeof selected === 'string' ? selected : ''}
-                onChange={e => handleTextChange(q.id, e.target.value)}
+                onChange={e => handleTextChange(qi, e.target.value)}
                 disabled={submitted}
                 placeholder="Type your answer here..."
                 rows={4}
@@ -205,59 +158,49 @@ export function QuizViewer({ block, userId, onPass }: Props) {
           )
         }
 
-        const selectedIndexes = isMultiAnswer && Array.isArray(selected) ? selected : []
-
         return (
           <div key={q.id} className="space-y-3">
             <p className="font-medium text-slate-900">
               {qi + 1}. {q.question}
             </p>
-            {q.image_url && <img src={q.image_url} alt="" className="max-h-64 rounded-lg border border-slate-200" />}
-            {isMultiAnswer && (
-              <p className="text-xs text-slate-500">Select all that apply.</p>
-            )}
             <div className="space-y-2">
               {q.options.map((opt, oi) => {
-                const isSelected = isMultiAnswer ? selectedIndexes.includes(oi) : selected === oi
-                const isCorrectOpt = isMultiAnswer ? (q.correct_indexes ?? []).includes(oi) : oi === q.correct_index
+                const isSelected = selected === oi
+                const isCorrectOpt = oi === q.correct_index
 
                 return (
                   <button
                     key={oi}
-                    onClick={() => isMultiAnswer ? handleToggleMulti(q.id, oi) : handleSelect(q.id, oi)}
+                    onClick={() => handleSelect(qi, oi)}
                     disabled={submitted}
                     className={cn(
                       'w-full text-left rounded-lg border-2 px-4 py-3 text-sm transition-all',
                       'flex items-center gap-3',
                       !submitted && !isSelected && 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50',
                       !submitted && isSelected && 'border-blue-500 bg-blue-50 text-blue-900',
-                      submitted && isSelected && isCorrectOpt && 'border-green-500 bg-green-50 text-green-900',
-                      submitted && isSelected && !isCorrectOpt && 'border-red-500 bg-red-50 text-red-900',
+                      submitted && isSelected && isCorrect && 'border-green-500 bg-green-50 text-green-900',
+                      submitted && isSelected && isWrong && 'border-red-500 bg-red-50 text-red-900',
                       submitted && !isSelected && isCorrectOpt && 'border-green-300 bg-green-50/50 text-green-800',
                       submitted && !isSelected && !isCorrectOpt && 'border-slate-200 bg-white text-slate-400',
                     )}
                   >
                     <span className={cn(
-                      'flex h-6 w-6 shrink-0 items-center justify-center text-xs font-bold border-2',
-                      isMultiAnswer ? 'rounded-md' : 'rounded-full',
+                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold',
                       !submitted && isSelected ? 'border-blue-500 bg-blue-500 text-white' : '',
                       !submitted && !isSelected ? 'border-slate-300 text-slate-400' : '',
-                      submitted && isSelected && isCorrectOpt ? 'border-green-500 bg-green-500 text-white' : '',
-                      submitted && isSelected && !isCorrectOpt ? 'border-red-500 bg-red-500 text-white' : '',
+                      submitted && isSelected && isCorrect ? 'border-green-500 bg-green-500 text-white' : '',
+                      submitted && isSelected && isWrong ? 'border-red-500 bg-red-500 text-white' : '',
                       submitted && !isSelected && isCorrectOpt ? 'border-green-500 text-green-600' : '',
                     )}>
-                      {isMultiAnswer && isSelected ? <CheckCircle className="h-3.5 w-3.5" /> : String.fromCharCode(65 + oi)}
+                      {String.fromCharCode(65 + oi)}
                     </span>
                     <span className="flex-1">{opt}</span>
-                    {submitted && isSelected && isCorrectOpt && <CheckCircle className="h-5 w-5 text-green-600 shrink-0" />}
-                    {submitted && isSelected && !isCorrectOpt && <XCircle className="h-5 w-5 text-red-600 shrink-0" />}
+                    {submitted && isSelected && isCorrect && <CheckCircle className="h-5 w-5 text-green-600 shrink-0" />}
+                    {submitted && isSelected && isWrong && <XCircle className="h-5 w-5 text-red-600 shrink-0" />}
                   </button>
                 )
               })}
             </div>
-            {submitted && isWrong && isMultiAnswer && (
-              <p className="text-xs text-amber-600">You must select every correct option, and only the correct options, to earn credit.</p>
-            )}
             {submitted && q.explanation && (
               <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-600">
                 <span className="font-medium">Explanation: </span>{q.explanation}

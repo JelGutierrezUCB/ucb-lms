@@ -5,7 +5,6 @@ import { Award, Search, Download } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatDate } from '@/lib/utils'
-import { CertificatePreviewButton } from './CertificatePreviewButton'
 import type { Certificate } from '@/types'
 
 export function CertificatesTable({ certificates }: { certificates: Certificate[] }) {
@@ -82,18 +81,15 @@ export function CertificatesTable({ certificates }: { certificates: Certificate[
                         </td>
                         <td className="px-4 py-3 text-slate-500">{formatDate(cert.completed_at)}</td>
                         <td className="px-4 py-3 text-slate-500">{formatDate(cert.issued_at)}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-3">
-                            <CertificatePreviewButton href={`/api/certificate?certificateId=${cert.id}`} className="text-blue-700" />
-                            <a
-                              href={`/api/certificate?certificateId=${cert.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 text-blue-700 hover:underline"
-                            >
-                              <Download className="h-3.5 w-3.5" /> Download
-                            </a>
-                          </div>
+                        <td className="px-4 py-3 text-right">
+                          <a
+                            href={`/api/certificate?certificateId=${cert.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-blue-700 hover:underline"
+                          >
+                            <Download className="h-3.5 w-3.5" /> Download
+                          </a>
                         </td>
                       </tr>
                     )

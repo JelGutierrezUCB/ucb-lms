@@ -25,7 +25,7 @@ async function extractText(buffer: Buffer, fileName: string): Promise<string> {
     return result.value
   }
 
-  if (lower.endsWith('.pptx') || lower.endsWith('.ppt') || lower.endsWith('.xlsx')) {
+  if (lower.endsWith('.pptx') || lower.endsWith('.ppt')) {
     const officeParser = await import('officeparser')
     const text = await new Promise<string>((resolve, reject) => {
       officeParser.parseOffice(buffer, (err: any, data: string) => {
@@ -34,10 +34,6 @@ async function extractText(buffer: Buffer, fileName: string): Promise<string> {
       })
     })
     return text
-  }
-
-  if (lower.endsWith('.xls')) {
-    throw new Error('Legacy .xls files aren\'t supported — save it as .xlsx and try again')
   }
 
   throw new Error(`Unsupported file type: ${fileName}`)

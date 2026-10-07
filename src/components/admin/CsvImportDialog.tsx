@@ -22,7 +22,6 @@ interface ParsedRow {
   company: string
   department: string
   manager_email: string
-  job_role: string
 }
 
 interface RowResult {
@@ -43,17 +42,9 @@ const HEADER_MAP: Record<string, keyof ParsedRow> = {
   manager: 'manager_email',
   manager_email: 'manager_email',
   manageremail: 'manager_email',
-  supervisor: 'manager_email',
-  supervisor_email: 'manager_email',
-  supervisoremail: 'manager_email',
-  job_role: 'job_role',
-  jobrole: 'job_role',
-  job_title: 'job_role',
-  jobtitle: 'job_role',
-  position: 'job_role',
 }
 
-const SAMPLE_CSV = 'full_name,email,role,job_role,company,department,manager_email\nJane Smith,jane@ucb.com,employee,Communications and People Development Specialist,UCBEnvironmental,Human Resources,manager@ucb.com\n'
+const SAMPLE_CSV = 'full_name,email,role,company,department,manager_email\nJane Smith,jane@ucb.com,employee,UCBEnvironmental,Human Resources,manager@ucb.com\n'
 
 export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
   const [rows, setRows] = useState<ParsedRow[]>([])
@@ -78,7 +69,7 @@ export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
       transformHeader: h => h.trim().toLowerCase().replace(/\s+/g, '_'),
       complete: res => {
         const parsed: ParsedRow[] = res.data.map(raw => {
-          const row: ParsedRow = { full_name: '', email: '', role: 'employee', company: '', department: '', manager_email: '', job_role: '' }
+          const row: ParsedRow = { full_name: '', email: '', role: 'employee', company: '', department: '', manager_email: '' }
           for (const [key, value] of Object.entries(raw)) {
             const mapped = HEADER_MAP[key]
             if (mapped && value) row[mapped] = value.trim()
@@ -140,8 +131,8 @@ export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
         <DialogHeader>
           <DialogTitle>Bulk Import Users from CSV</DialogTitle>
           <DialogDescription>
-            Columns: full_name, email, role (admin/manager/employee), job_role, company, department, manager_email (all optional except name and email).
-            New job roles are created automatically. Each user gets a generated password emailed to them, and is enrolled in any learning journeys they match.
+            Columns: full_name, email, role (admin/manager/employee), company, department, manager_email (optional).
+            Each user gets a generated password emailed to them.
           </DialogDescription>
         </DialogHeader>
 
@@ -183,8 +174,7 @@ export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
                         <tr>
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Name</th>
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Email</th>
-                          <th className="text-left px-3 py-2 font-medium text-slate-600">Account type</th>
-                          <th className="text-left px-3 py-2 font-medium text-slate-600">Job role</th>
+                          <th className="text-left px-3 py-2 font-medium text-slate-600">Role</th>
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Company</th>
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Department</th>
                           <th className="text-left px-3 py-2 font-medium text-slate-600">Manager Email</th>
@@ -196,7 +186,6 @@ export function CsvImportDialog({ open, onOpenChange, onImported }: Props) {
                             <td className="px-3 py-1.5">{row.full_name || <span className="text-red-400">missing</span>}</td>
                             <td className="px-3 py-1.5">{row.email || <span className="text-red-400">missing</span>}</td>
                             <td className="px-3 py-1.5">{row.role}</td>
-                            <td className="px-3 py-1.5">{row.job_role || '—'}</td>
                             <td className="px-3 py-1.5">{row.company || '—'}</td>
                             <td className="px-3 py-1.5">{row.department || '—'}</td>
                             <td className="px-3 py-1.5">{row.manager_email || '—'}</td>

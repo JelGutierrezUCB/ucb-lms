@@ -81,7 +81,6 @@ export function TrainingGenerator({ userId, existingModules }: Props) {
       'application/msword': ['.doc'],
       'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'],
       'application/vnd.ms-powerpoint': ['.ppt'],
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
       'text/plain': ['.txt'],
     },
     maxFiles: 1,
@@ -180,7 +179,7 @@ export function TrainingGenerator({ userId, existingModules }: Props) {
           <h2 className="text-xl font-bold">AI Training Generator</h2>
         </div>
         <p className="text-blue-100">
-          Upload a PDF, Word document, PowerPoint, or Excel spreadsheet and Claude AI will turn it into structured training content with sections, content, and quiz questions — as a new module, or added into one you already have.
+          Upload a PDF, Word document, or PowerPoint and Claude AI will turn it into structured training content with sections, content, and quiz questions — as a new module, or added into one you already have.
         </p>
       </div>
 
@@ -243,7 +242,7 @@ export function TrainingGenerator({ userId, existingModules }: Props) {
                     <p className="font-semibold text-slate-700">
                       {isDragActive ? 'Drop your file here' : 'Drop a file or click to browse'}
                     </p>
-                    <p className="text-sm text-slate-400 mt-1">PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), or TXT — no size limit</p>
+                    <p className="text-sm text-slate-400 mt-1">PDF, Word (.docx), PowerPoint (.pptx), or TXT — no size limit</p>
                   </div>
                 </div>
               )}

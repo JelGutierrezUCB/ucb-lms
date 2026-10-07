@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { notifyUsers } from '@/lib/notifications'
+import { runReviewReminders } from '@/lib/introReviews/reminders'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +17,15 @@ export async function GET(req: NextRequest) {
 
   const admin = await createAdminClient()
 
+  // Introductory-review reminders ride on this same daily job (Vercel's free
+  // plan allows only a couple of cron entries, so it isn't a second schedule).
+  let reviewReminders = 0
+  try {
+    reviewReminders = (await runReviewReminders(admin)).sent
+  } catch (err) {
+    console.error('Introductory review reminders failed:', err)
+  }
+
   const tomorrow = new Date()
   tomorrow.setDate(tomorrow.getDate() + 1)
   const tomorrowStr = tomorrow.toISOString().slice(0, 10)
@@ -26,7 +36,7 @@ export async function GET(req: NextRequest) {
     .eq('due_date', tomorrowStr)
 
   if (!assignments || assignments.length === 0) {
-    return NextResponse.json({ notified: 0 })
+    return NextResponse.json({ notified: 0, reviewReminders })
   }
 
   let notified = 0
@@ -65,5 +75,5 @@ export async function GET(req: NextRequest) {
     notified++
   }
 
-  return NextResponse.json({ notified })
+  return NextResponse.json({ notified, reviewReminders })
 }

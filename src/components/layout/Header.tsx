@@ -2,12 +2,9 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LogOut, ChevronDown, UserCog, Menu } from 'lucide-react'
+import { LogOut, ChevronDown, UserCog } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProxy } from '@/contexts/ProxyContext'
-import { useMobileNav } from '@/contexts/MobileNavContext'
-import { useLocale } from '@/contexts/LocaleContext'
-import { LanguageSwitcher } from './LanguageSwitcher'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,52 +21,32 @@ export function Header({ title }: { title?: string }) {
   const { profile, signOut } = useAuth()
   const { proxyUser, endProxy } = useProxy()
   const router = useRouter()
-  const { setOpen: setMobileNavOpen } = useMobileNav()
-  const { t } = useLocale()
 
   const handleSignOut = async () => {
     await signOut()
     router.push('/login')
   }
 
-  // Returning from someone else's portal: managers land back on their own
-  // training (the original warehouse-proxy behavior); admins land on Users,
-  // where they most likely started this from.
-  const handleEndProxy = () => {
-    endProxy()
-    router.push(profile?.role === 'admin' ? '/admin/users' : '/training')
-  }
-
   return (
-    <header className="h-16 border-b border-slate-200 bg-white px-4 sm:px-6 flex items-center justify-between gap-2 shrink-0">
-      <div className="flex items-center gap-2 min-w-0">
-        <button
-          type="button"
-          onClick={() => setMobileNavOpen(true)}
-          className="lg:hidden shrink-0 rounded-lg p-2 -ml-2 text-slate-600 hover:bg-slate-100"
-          aria-label="Open menu"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-        {title && <h1 className="text-lg font-semibold text-slate-900 truncate">{title}</h1>}
+    <header className="h-16 border-b border-slate-200 bg-white px-6 flex items-center justify-between shrink-0">
+      <div>
+        {title && <h1 className="text-lg font-semibold text-slate-900">{title}</h1>}
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+      <div className="flex items-center gap-3">
         {/* Proxy indicator */}
         {proxyUser && (
           <div className="flex items-center gap-2 rounded-full bg-amber-50 border border-amber-200 px-3 py-1.5 text-sm">
             <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-            <span className="text-amber-700 font-medium">{t.header.viewingAs}: {proxyUser.full_name}</span>
+            <span className="text-amber-700 font-medium">Training as: {proxyUser.full_name}</span>
             <button
-              onClick={handleEndProxy}
+              onClick={() => { endProxy(); router.push('/training') }}
               className="ml-1 text-amber-600 hover:text-amber-800 font-semibold text-xs underline"
             >
-              {t.header.endSession}
+              End Session
             </button>
           </div>
         )}
-
-        <LanguageSwitcher className="hidden sm:flex" />
 
         {profile && <NotificationBell userId={profile.id} />}
 
@@ -97,17 +74,13 @@ export function Header({ title }: { title?: string }) {
             <DropdownMenuItem asChild>
               <Link href="/profile" className="flex items-center cursor-pointer">
                 <UserCog className="h-4 w-4 mr-2" />
-                {t.common.profileSettings}
+                Profile Settings
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="sm:hidden focus:bg-transparent" onSelect={e => e.preventDefault()}>
-              <LanguageSwitcher />
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="sm:hidden" />
             <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600 focus:bg-red-50">
               <LogOut className="h-4 w-4 mr-2" />
-              {t.common.signOut}
+              Sign Out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
