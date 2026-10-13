@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
         category: mod.category,
         estimated_minutes: mod.estimated_minutes,
         is_published: false,
+        is_ai_generated: true,
         created_by: userId,
       })
       .select()

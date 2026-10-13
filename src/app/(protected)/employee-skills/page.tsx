@@ -2,7 +2,10 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { EmployeeSkillsView } from '@/components/admin/EmployeeSkillsView'
-import type { Profile, Skill, JobRole, JobRoleSkill, ModuleSkill, Module, EmployeeSkillAssessment } from '@/types'
+import { isProtectedModule } from '@/lib/protected-modules'
+import type {
+  Profile, Skill, JobRole, JobRoleSkill, ModuleSkill, Module, EmployeeSkillAssessment, LearningResource, TrainingRecommendation,
+} from '@/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,23 +38,36 @@ export default async function EmployeeSkillsPage({
     { data: jobRoles },
     { data: jobRoleSkills },
     { data: moduleSkills },
-    { data: modules },
+    { data: modulesRaw },
+    { data: resources },
   ] = await Promise.all([
     supabase.from('skills').select('*') as unknown as Promise<{ data: Skill[] | null }>,
     supabase.from('job_roles').select('*') as unknown as Promise<{ data: JobRole[] | null }>,
     supabase.from('job_role_skills').select('*') as unknown as Promise<{ data: JobRoleSkill[] | null }>,
     supabase.from('module_skills').select('*') as unknown as Promise<{ data: ModuleSkill[] | null }>,
     supabase.from('modules').select('id, title, category, estimated_minutes').eq('is_published', true).eq('is_archived', false) as unknown as Promise<{ data: Pick<Module, 'id' | 'title' | 'category' | 'estimated_minutes'>[] | null }>,
+    supabase.from('learning_resources').select('id, title, provider, resource_type').eq('is_published', true).order('title') as unknown as Promise<{ data: Pick<LearningResource, 'id' | 'title' | 'provider' | 'resource_type'>[] | null }>,
   ])
+  const modules = (modulesRaw ?? []).filter(m => !isProtectedModule(m.id))
 
   let assessments: EmployeeSkillAssessment[] = []
+  let recommendations: TrainingRecommendation[] = []
   if (selectedId) {
-    const { data } = await supabase
-      .from('employee_skill_assessments')
-      .select('*')
-      .eq('user_id', selectedId)
-      .order('assessed_at', { ascending: false }) as { data: EmployeeSkillAssessment[] | null }
-    assessments = data ?? []
+    const [{ data: a }, { data: r }] = await Promise.all([
+      supabase
+        .from('employee_skill_assessments')
+        .select('*')
+        .eq('user_id', selectedId)
+        .order('assessed_at', { ascending: false }) as unknown as Promise<{ data: EmployeeSkillAssessment[] | null }>,
+      supabase
+        .from('training_recommendations')
+        .select('*')
+        .eq('user_id', selectedId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false }) as unknown as Promise<{ data: TrainingRecommendation[] | null }>,
+    ])
+    assessments = a ?? []
+    recommendations = r ?? []
   }
 
   return (
@@ -65,7 +81,9 @@ export default async function EmployeeSkillsPage({
           jobRoles={jobRoles ?? []}
           jobRoleSkills={jobRoleSkills ?? []}
           moduleSkills={moduleSkills ?? []}
-          modules={modules ?? []}
+          modules={modules}
+          resources={resources ?? []}
+          recommendations={recommendations}
           assessments={assessments}
           currentUserId={user.id}
         />

@@ -48,6 +48,8 @@ export interface Module {
   // Retired from active use — hidden from the catalog, assignment rules, and
   // journey builder, but its content/history/certificates stay intact.
   is_archived: boolean
+  // Created by the AI generator (shown as a label in recommendations).
+  is_ai_generated?: boolean
   created_by: string | null
   estimated_minutes: number
   auto_assign_all: boolean
@@ -302,6 +304,48 @@ export interface EmployeeSkillAssessment {
   assessed_by: string | null
   assessed_at: string
   notes: string | null
+}
+
+// A curated public course / lesson / recorded webinar (external link) that can
+// be recommended alongside the portal's own trainings.
+export const RESOURCE_TYPES = [
+  { value: 'course', label: 'Course' },
+  { value: 'lesson', label: 'Lesson' },
+  { value: 'webinar', label: 'Recorded webinar' },
+  { value: 'video', label: 'Video' },
+  { value: 'article', label: 'Article' },
+] as const
+
+export type ResourceType = (typeof RESOURCE_TYPES)[number]['value']
+
+export interface LearningResource {
+  id: string
+  title: string
+  url: string
+  provider: string | null
+  resource_type: ResourceType
+  description: string | null
+  estimated_minutes: number | null
+  is_published: boolean
+  created_by: string | null
+  created_at: string
+}
+
+export interface ResourceSkill {
+  resource_id: string
+  skill_id: string
+}
+
+// A supervisor/admin recommending a specific training or resource to a person.
+export interface TrainingRecommendation {
+  id: string
+  user_id: string
+  module_id: string | null
+  resource_id: string | null
+  recommended_by: string | null
+  note: string | null
+  status: 'pending' | 'dismissed'
+  created_at: string
 }
 
 export type LearningPathKind = 'learning' | 'onboarding'

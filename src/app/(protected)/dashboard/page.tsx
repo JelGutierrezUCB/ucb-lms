@@ -10,6 +10,8 @@ import { getPortalView } from '@/lib/view'
 import { getProxyTarget } from '@/lib/proxy'
 import { getDict } from '@/lib/i18n/get-locale'
 import { fmt } from '@/lib/i18n/dictionaries'
+import { loadRecommendations } from '@/lib/recommendations'
+import { reasonText } from '@/lib/recommendation-text'
 import { NextStepHero, type NextAction } from '@/components/dashboard/NextStepHero'
 import { JourneyDots } from '@/components/paths/JourneyDots'
 import { ProgressRing } from '@/components/ui/progress-ring'
@@ -244,35 +246,14 @@ export default async function DashboardPage() {
     nextSectionTitle: a.nextSectionTitle,
   }))
 
-  // Recommended: published trainings not assigned to this employee, favoring
-  // the categories they already work in, then newest first. Only trainings
-  // that actually have content are suggested.
-  const { data: publishedModules } = await supabase
-    .from('modules')
-    .select('*')
-    .eq('is_published', true)
-    .order('created_at', { ascending: false }) as { data: Module[] | null }
-
-  const assignedIds = new Set(moduleIds)
-  const candidates = (publishedModules ?? []).filter(m => !assignedIds.has(m.id) && !isProtectedModule(m.id))
-  const { data: candidateSections } = await supabase
-    .from('sections')
-    .select('module_id')
-    .in('module_id', candidates.length ? candidates.map(m => m.id) : [''])
-    .eq('is_archived', false)
-  const modulesWithContent = new Set((candidateSections ?? []).map(s => s.module_id))
-
-  const categoryWeight: Record<string, number> = {}
-  for (const a of assignmentsWithProgress) {
-    const c = a.module?.category
-    if (c) categoryWeight[c] = (categoryWeight[c] ?? 0) + 1
-  }
-  const recommended = candidates
-    .filter(m => modulesWithContent.has(m.id))
-    .map((m, i) => ({ m, weight: categoryWeight[m.category] ?? 0, i }))
-    .sort((a, b) => b.weight - a.weight || a.i - b.i)
-    .slice(0, 4)
-    .map(x => x.m)
+  // "What should I learn next?" picks — the same engine as /learn-next
+  // (job role, required training, skill gaps, results, history, supervisor).
+  const { items: recommendationItems } = await loadRecommendations(
+    supabase,
+    effectiveUserId,
+    proxyTarget ? (proxyTarget.job_role_id ?? null) : (profile.job_role_id ?? null)
+  )
+  const recommended = recommendationItems.slice(0, 4)
 
   // Score summary (condensed — full history lives at /score-summary)
   const { data: quizAttempts } = await supabase
@@ -414,33 +395,38 @@ export default async function DashboardPage() {
               <CardTitle className="flex items-center gap-2">
                 <Lightbulb className="h-5 w-5 text-amber-500" /> {t.dashboard.recommendedForYou}
               </CardTitle>
-              <Link href="/training" className="text-sm text-blue-600 hover:underline">{t.dashboard.browseAllCourses}</Link>
+              <Link href="/learn-next" className="text-sm text-blue-600 hover:underline">{t.learnNext.seeAll}</Link>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {recommended.map(m => (
-                  <Link
-                    key={m.id}
-                    href={`/training/${m.id}`}
-                    className="flex items-start gap-3 p-4 rounded-xl border border-slate-200 hover:border-blue-200 hover:bg-blue-50/30 transition-all group"
-                  >
-                    <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white font-bold"
-                      style={{ backgroundColor: getCategoryColor(m.category) }}
-                    >
-                      {m.title.charAt(0)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">{m.title}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        {getCategoryLabel(m.category)} · {m.estimated_minutes} min
-                      </p>
-                      {m.description && (
-                        <p className="text-sm text-slate-500 line-clamp-2 mt-1">{m.description}</p>
-                      )}
-                    </div>
-                  </Link>
-                ))}
+                {recommended.map(item => {
+                  const body = (
+                    <>
+                      <div
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white font-bold"
+                        style={{ backgroundColor: item.category ? getCategoryColor(item.category) : '#714F36' }}
+                      >
+                        {item.title.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">{item.title}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {item.external
+                            ? `${item.resourceType ? t.learnNext.resourceTypes[item.resourceType] : t.learnNext.external}${item.provider ? ` · ${item.provider}` : ''}`
+                            : item.category ? getCategoryLabel(item.category) : ''}
+                          {item.minutes ? ` · ${item.minutes} ${t.common.minutes}` : ''}
+                        </p>
+                        <p className="text-sm text-slate-600 line-clamp-2 mt-1">{reasonText(t, item.reasons[0])}</p>
+                      </div>
+                    </>
+                  )
+                  const cls = 'flex items-start gap-3 p-4 rounded-xl border border-slate-200 hover:border-blue-200 hover:bg-blue-50/30 transition-all group'
+                  return item.external ? (
+                    <a key={item.key} href={item.href} target="_blank" rel="noopener noreferrer" className={cls}>{body}</a>
+                  ) : (
+                    <Link key={item.key} href={item.href} className={cls}>{body}</Link>
+                  )
+                })}
               </div>
             </CardContent>
           </Card>

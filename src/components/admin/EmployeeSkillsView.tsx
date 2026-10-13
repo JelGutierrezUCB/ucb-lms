@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Gauge, Plus, Users } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Gauge, Lightbulb, Plus, Trash2, Users } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,10 +17,13 @@ import {
 import { formatDate } from '@/lib/utils'
 import { SKILL_PROFICIENCY_LEVELS } from '@/types'
 import { proficiencyLabel, latestAssessmentBySkill, computeSkillGaps } from '@/lib/skills'
-import type { EmployeeSkillAssessment, JobRole, JobRoleSkill, Module, ModuleSkill, Skill } from '@/types'
+import type {
+  EmployeeSkillAssessment, JobRole, JobRoleSkill, LearningResource, Module, ModuleSkill, Skill, TrainingRecommendation,
+} from '@/types'
 
 type EmployeeLite = { id: string; full_name: string; department: string | null; job_role_id: string | null }
 type ModuleLite = Pick<Module, 'id' | 'title' | 'category' | 'estimated_minutes'>
+type ResourceLite = Pick<LearningResource, 'id' | 'title' | 'provider' | 'resource_type'>
 
 interface Props {
   employees: EmployeeLite[]
@@ -30,15 +33,20 @@ interface Props {
   jobRoleSkills: JobRoleSkill[]
   moduleSkills: ModuleSkill[]
   modules: ModuleLite[]
+  resources: ResourceLite[]
+  recommendations: TrainingRecommendation[]
   assessments: EmployeeSkillAssessment[]
   currentUserId: string
 }
 
 export function EmployeeSkillsView({
-  employees, selectedId, skills, jobRoles, jobRoleSkills, moduleSkills, modules, assessments, currentUserId,
+  employees, selectedId, skills, jobRoles, jobRoleSkills, moduleSkills, modules, resources, recommendations,
+  assessments, currentUserId,
 }: Props) {
   const router = useRouter()
+  const supabase = createClient()
   const [assessing, setAssessing] = useState<Skill | 'new' | null>(null)
+  const [recommending, setRecommending] = useState(false)
   const [historyFor, setHistoryFor] = useState<string | null>(null)
 
   const employee = employees.find(e => e.id === selectedId) ?? null
@@ -71,6 +79,28 @@ export function EmployeeSkillsView({
     moduleSkills.filter(ms => ms.skill_id === skillId).map(ms => moduleById.get(ms.module_id)).filter((m): m is ModuleLite => !!m)
 
   const gapCount = gaps.filter(g => g.gap > 0).length
+
+  const resourceById = useMemo(() => new Map(resources.map(r => [r.id, r])), [resources])
+  const pendingRecs = recommendations
+    .filter(r => r.status === 'pending')
+    .map(r => {
+      const m = r.module_id ? moduleById.get(r.module_id) : null
+      const res = r.resource_id ? resourceById.get(r.resource_id) : null
+      return {
+        id: r.id,
+        title: m?.title ?? res?.title ?? 'Unavailable training',
+        kind: r.module_id ? 'Portal training' : 'External resource',
+        note: r.note,
+        created_at: r.created_at,
+      }
+    })
+
+  async function withdrawRecommendation(id: string) {
+    const { error } = await supabase.from('training_recommendations').delete().eq('id', id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Recommendation withdrawn')
+    router.refresh()
+  }
 
   return (
     <div className="space-y-5">
@@ -195,7 +225,55 @@ export function EmployeeSkillsView({
           <Button variant="outline" onClick={() => setAssessing('new')}>
             <Plus className="h-4 w-4 mr-2" /> Assess another skill
           </Button>
+
+          <div className="space-y-2 pt-2">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                <Lightbulb className="h-4 w-4 text-amber-500" /> Recommended to {employee.full_name}
+              </h3>
+              <Button variant="outline" size="sm" onClick={() => setRecommending(true)}>
+                <Plus className="h-4 w-4 mr-1.5" /> Recommend training
+              </Button>
+            </div>
+            {pendingRecs.length === 0 ? (
+              <p className="text-sm text-slate-400">
+                Nothing recommended yet. Recommended trainings show up at the top of their &ldquo;What should I learn next?&rdquo; page.
+              </p>
+            ) : (
+              <ul className="rounded-xl border border-slate-200 bg-white divide-y divide-slate-100">
+                {pendingRecs.map(rec => (
+                  <li key={rec.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-800 truncate">{rec.title}</p>
+                      <p className="text-xs text-slate-400 truncate">
+                        {rec.kind} · {formatDate(rec.created_at)}{rec.note ? ` · “${rec.note}”` : ''}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => withdrawRecommendation(rec.id)}
+                      className="shrink-0 p-1 text-slate-400 hover:text-red-600"
+                      aria-label="Withdraw recommendation"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </>
+      )}
+
+      {recommending && employee && (
+        <RecommendDialog
+          modules={modules}
+          resources={resources}
+          employeeId={employee.id}
+          employeeName={employee.full_name}
+          currentUserId={currentUserId}
+          alreadyRecommended={new Set(recommendations.map(r => r.module_id ?? r.resource_id ?? ''))}
+          onClose={() => setRecommending(false)}
+        />
       )}
 
       {assessing && employee && (
@@ -209,6 +287,99 @@ export function EmployeeSkillsView({
         />
       )}
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+
+function RecommendDialog({
+  modules, resources, employeeId, employeeName, currentUserId, alreadyRecommended, onClose,
+}: {
+  modules: ModuleLite[]
+  resources: ResourceLite[]
+  employeeId: string
+  employeeName: string
+  currentUserId: string
+  alreadyRecommended: Set<string>
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const supabase = createClient()
+  const [choice, setChoice] = useState('')
+  const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (!choice) { toast.error('Choose a training or resource'); return }
+    const [kind, id] = choice.split(':')
+    setSaving(true)
+    const { data, error } = await supabase
+      .from('training_recommendations')
+      .insert({
+        user_id: employeeId,
+        module_id: kind === 'module' ? id : null,
+        resource_id: kind === 'resource' ? id : null,
+        recommended_by: currentUserId,
+        note: note.trim() || null,
+      })
+      .select('id')
+      .single()
+    if (error) { toast.error(error.message); setSaving(false); return }
+
+    // Let them know (in-app + email); failure here shouldn't undo the recommendation.
+    fetch('/api/notifications/recommendation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recommendationId: data.id }),
+    }).catch(() => {})
+
+    toast.success(`Recommended to ${employeeName}`)
+    onClose()
+    router.refresh()
+  }
+
+  return (
+    <Dialog open onOpenChange={open => { if (!open) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Recommend training</DialogTitle>
+          <DialogDescription>
+            It appears at the top of {employeeName}&apos;s &ldquo;What should I learn next?&rdquo; and they&apos;re notified.
+            This doesn&apos;t assign it — use Assign for required training.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Training or resource</Label>
+            <Select value={choice} onValueChange={setChoice}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose…" />
+              </SelectTrigger>
+              <SelectContent>
+                {modules.length > 0 && <div className="px-2 py-1 text-xs font-semibold text-slate-400">In this portal</div>}
+                {modules.map(m => (
+                  <SelectItem key={`module:${m.id}`} value={`module:${m.id}`} disabled={alreadyRecommended.has(m.id)}>{m.title}</SelectItem>
+                ))}
+                {resources.length > 0 && <div className="px-2 py-1 text-xs font-semibold text-slate-400">External resources</div>}
+                {resources.map(r => (
+                  <SelectItem key={`resource:${r.id}`} value={`resource:${r.id}`} disabled={alreadyRecommended.has(r.id)}>
+                    {r.title}{r.provider ? ` — ${r.provider}` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Why? (optional, shown to them)</Label>
+            <Textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="e.g. This will help with the forklift certification next month" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button loading={saving} onClick={save}>Recommend</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

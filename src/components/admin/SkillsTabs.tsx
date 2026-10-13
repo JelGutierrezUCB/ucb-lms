@@ -1,12 +1,13 @@
 import Link from 'next/link'
-import { ListTree, UserCog } from 'lucide-react'
+import { Library, ListTree, UserCog } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export type SkillsTab = 'library' | 'requirements'
+export type SkillsTab = 'library' | 'requirements' | 'resources'
 
 const TABS: { key: SkillsTab; label: string; icon: React.ElementType }[] = [
   { key: 'library', label: 'Skill Library', icon: ListTree },
   { key: 'requirements', label: 'Job Role Requirements', icon: UserCog },
+  { key: 'resources', label: 'External Resources', icon: Library },
 ]
 
 export function SkillsTabs({ active }: { active: SkillsTab }) {

@@ -20,6 +20,7 @@ import {
   Settings2,
   Target,
   Gauge,
+  Compass,
   X,
   CalendarCheck,
 } from 'lucide-react'
@@ -52,6 +53,7 @@ interface NavItem {
 // every account type. Translated (English/Spanish) via labelKey.
 const learnerItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', labelKey: 'dashboard', icon: <LayoutDashboard className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'], exact: true },
+  { href: '/learn-next', label: 'What to Learn Next', labelKey: 'whatNext', icon: <Compass className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
   { href: '/training', label: 'My Training', labelKey: 'myTraining', icon: <BookOpen className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
   { href: '/paths', label: 'Learning Journeys', labelKey: 'learningJourneys', icon: <Route className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
   { href: '/training-history', label: 'My History', labelKey: 'myHistory', icon: <History className="h-5 w-5" />, roles: ['admin', 'manager', 'employee'] },
