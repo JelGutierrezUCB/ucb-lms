@@ -8,11 +8,15 @@ export const dynamic = 'force-dynamic'
 // Vercel automatically sends `Authorization: Bearer $CRON_SECRET` for scheduled invocations
 // when the CRON_SECRET env var is set on the project. See vercel.json for the schedule.
 export async function GET(req: NextRequest) {
-  if (process.env.CRON_SECRET) {
-    const auth = req.headers.get('authorization')
-    if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  // This route is reachable without a login (the scheduler has none), so the
+  // secret is mandatory: with no CRON_SECRET configured it refuses to run
+  // rather than letting anyone trigger reminder emails.
+  const secret = process.env.CRON_SECRET
+  if (!secret) {
+    return NextResponse.json({ error: 'CRON_SECRET is not configured' }, { status: 503 })
+  }
+  if (req.headers.get('authorization') !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const admin = await createAdminClient()

@@ -28,7 +28,10 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  const publicPaths = ['/login', '/api/auth', '/forgot-password', '/reset-password']
+  // /api/cron/* is called by Vercel's scheduler, which has no user session —
+  // without this exemption it was redirected to /login and the daily reminder
+  // jobs never ran. Those routes authenticate themselves with CRON_SECRET.
+  const publicPaths = ['/login', '/api/auth', '/forgot-password', '/reset-password', '/api/cron']
   const isPublic = publicPaths.some(p => pathname.startsWith(p))
 
   if (!user && !isPublic) {
